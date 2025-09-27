@@ -1,0 +1,20 @@
+{
+  "clean": {
+    "enable": true,
+    "targets": {
+      "pycache": true,
+      "pytest_cache": true,
+      "mypy_cache": true,
+      "ruff_cache": true,
+      "coverage": true,
+      "build": true,
+      "dist": true,
+      "editor": true,
+      "ds_store": true,
+      "thumbs_db": true,
+      "node_modules": false
+    },
+    "extra_globs": [],
+    "skip_globs": []
+  }
+}

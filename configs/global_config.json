@@ -3,31 +3,5 @@
   "include_extensions": [".py", ".sh", ".c", ".cpp", ".h", ".js", ".ts"],
   "exclude_dirs": ["__pycache__", "build", ".git", "node_modules", "venv"],
   "exclude_files": [],
-  "case_insensitive": true,
-  "paste": {
-    "root": ".",
-    "out_dir": "paste_out",
-    "max_lines": 4000,
-    "allow_binary": false,
-    "include": ["**/*.py", "**/*.js", "**/*.ts", "**/*.css", "**/*.html", "**/*.json", "**/*.md", "**/*.sh"],
-    "exclude": ["**/.git/**", "**/venv/**", "**/node_modules/**", "**/__pycache__/**", "**/.pytest_cache/**", "**/.mypy_cache/**", "**/.DS_Store"],
-    "only_globs": [],
-    "skip_globs": []
-  },
-  "gh_raw": {
-    "user": "Sygaro",
-    "repo": "countdown",
-    "branch": "main",
-    "path_prefix": ""
-  },
-  "format": {
-    "prettier": { "enable": true, "globs": ["static/**/*.{html,css,js}"] },
-    "black":    { "enable": true, "paths": ["app"] },
-    "ruff":     { "enable": true, "args": ["check", "app", "--fix"] },
-    "cleanup": {
-      "enable": true,
-      "paths": ["app", "static"], 
-      "exts": [".py", ".js", ".ts", ".css", ".html", ".json", ".sh"]
-    }
-  }
+  "case_insensitive": true
 }

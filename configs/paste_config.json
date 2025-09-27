@@ -2,10 +2,10 @@
   "paste": {
     "root": ".",
     "out_dir": "paste_out",
-    "max_lines": 3000,
+    "max_lines": 4000,
     "allow_binary": false,
-    "include": [".pastechunksrc", "tools/get_raw_links.sh", "tools/make_paste_chunks.py", "tools/run_paste_chunks.sh", "tools/rydd_kode.sh"],
-    "exclude": ["**/.git/**", "**/venv/**", "**/node_modules/**", "**/__pycache__/**", "**/.pytest_cache/**", "**/.mypy_cache/**", "**/.DS_Store", "app/routes/._.DS_Store", "._.DS_Store", ".vscode/settings.json"],
+    "include": ["**/*.py", "**/*.js", "**/*.ts", "**/*.css", "**/*.html", "**/*.json", "**/*.md", "**/*.sh"],
+    "exclude": ["**/.git/**", "**/venv/**", "**/node_modules/**", "**/__pycache__/**", "**/.pytest_cache/**", "**/.mypy_cache/**", "**/.DS_Store"],
     "only_globs": [],
     "skip_globs": []
   }
