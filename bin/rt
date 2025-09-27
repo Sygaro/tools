@@ -13,5 +13,8 @@ if [[ ! -d "$VENV" ]]; then
   fi
 fi
 
+# Viktig: sørg for at black/ruff i venv finnes i PATH for subprocess
+export PATH="$VENV/bin:${PATH:-}"
 export PYTHONPATH="$TOOLS_ROOT:${PYTHONPATH:-}"
+
 exec "$VENV/bin/python" -m r_tools.cli "$@"
