@@ -1,0 +1,7 @@
+{
+  "format": {
+    "prettier": { "enable": true, "globs": ["static/**/*.{html,css,js}"] },
+    "black":    { "enable": true, "paths": ["app"] },
+    "ruff":     { "enable": true, "args": ["check", "app", "--fix"] }
+  }
+}

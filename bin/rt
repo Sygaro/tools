@@ -1,0 +1,17 @@
+# /home/reidar/tools/bin/rt
+#!/usr/bin/env bash
+set -euo pipefail
+TOOLS_ROOT="/home/reidar/tools"
+VENV="$TOOLS_ROOT/venv"
+
+if [[ ! -d "$VENV" ]]; then
+  echo "Oppretter venv i $VENV ..."
+  python3 -m venv "$VENV"
+  "$VENV/bin/pip" install -U pip
+  if [[ -f "$TOOLS_ROOT/requirements.txt" ]]; then
+    "$VENV/bin/pip" install -r "$TOOLS_ROOT/requirements.txt"
+  fi
+fi
+
+export PYTHONPATH="$TOOLS_ROOT:${PYTHONPATH:-}"
+exec "$VENV/bin/python" -m r_tools.cli "$@"
