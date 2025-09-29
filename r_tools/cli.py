@@ -25,6 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--no-color", action="store_true")
     sp.add_argument("--count", action="store_true")
     sp.add_argument("--max-size", type=int, default=2_000_000)
+    sp.add_argument("--all", action="store_true", help="Krev at alle termer matcher samme linje (AND-søk)")
 
     # paste
     pp = sub.add_parser("paste", help="Lag innlimingsklare filer (chunks)")
@@ -83,9 +84,14 @@ def main() -> None:
             cli_overrides["case_insensitive"] = False
 
         cfg = load_config("search_config.json", args.project, cli_overrides or None)
-        run_search(cfg=cfg, terms=args.terms or None,
-                   use_color=not args.no_color, show_count=args.count,
-                   max_size=args.max_size)
+        run_search(
+            cfg=cfg,
+            terms=args.terms or None,
+            use_color=not args.no_color,
+            show_count=args.count,
+            max_size=args.max_size,
+            require_all=args.all,  # ← NYTT
+        )
         return
 
     if args.cmd == "paste":

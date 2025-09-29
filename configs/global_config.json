@@ -1,6 +1,6 @@
 {
   "project_root": ".",
-  "include_extensions": [".py", ".sh", ".c", ".cpp", ".h", ".js", ".ts"],
+  "include_extensions": [".py", ".sh", ".c", ".cpp", ".h", ".js", ".ts", ".css", ".html"],
   "exclude_dirs": ["__pycache__", "build", ".git", "node_modules", "venv"],
   "exclude_files": [],
   "case_insensitive": true

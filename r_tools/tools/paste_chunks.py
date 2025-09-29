@@ -1,4 +1,11 @@
 # /home/reidar/tools/r_tools/tools/paste_chunks.py
+"""
+Integrasjon av make_paste_chunks.py:
+- Leser config: cfg['paste'] {root,out_dir,max_lines,allow_binary,include,exclude,only_globs,skip_globs,filename_search}
+- --list-only støttes
+- Etter kjøring: skriver liste over inkluderte filer til stdout + out_dir/FILES.txt
+- filename_search: mønstre uten '/' tolkes som globale ('**/<mønster>') for både include og exclude
+"""
 from __future__ import annotations
 from pathlib import Path
 from typing import List, Tuple, Dict
@@ -56,18 +63,22 @@ def _brace_expand_one(pattern: str) -> List[str]:
     return [pattern]
 
 def _brace_expand(pattern: str) -> List[str]:
-    acc = [pattern]; changed = True
+    acc = [pattern]
+    changed = True
     while changed:
-        changed = False; new_acc: List[str] = []
+        changed = False
+        new_acc: List[str] = []
         for p in acc:
             expanded = _brace_expand_one(p)
-            if len(expanded) > 1 or expanded[0] != p: changed = True
+            if len(expanded) > 1 or expanded[0] != p:
+                changed = True
             new_acc.extend(expanded)
         acc = new_acc
     return acc
 
 def _normalize_pattern(pat: str) -> str:
-    while pat.startswith("/"): pat = pat[1:]
+    while pat.startswith("/"):
+        pat = pat[1:]
     return pat
 
 def _expand_patterns(patterns: List[str]) -> List[str]:
@@ -81,6 +92,18 @@ def _expand_patterns(patterns: List[str]) -> List[str]:
             seen.add(p); uniq.append(p)
     return uniq
 
+def _apply_filename_search(patterns: List[str], filename_search: bool) -> List[str]:
+    """Når på: mønstre uten '/' blir '**/<mønster>' for global match."""
+    if not filename_search:
+        return patterns or []
+    out: List[str] = []
+    for pat in patterns or []:
+        if ("/" not in pat) and (not pat.startswith("**/")):
+            out.append(f"**/{pat}")
+        else:
+            out.append(pat)
+    return out
+
 def _collect_files(root: Path, includes: List[str], excludes: List[str],
                    only_globs: List[str] | None, skip_globs: List[str] | None) -> List[Path]:
     root = root.resolve()
@@ -89,21 +112,21 @@ def _collect_files(root: Path, includes: List[str], excludes: List[str],
     only_globs = _expand_patterns(only_globs or [])
     skip_globs = _expand_patterns(skip_globs or [])
 
-    # Pre-filter: bygg kandidat-sett raskt
     candidates: set[Path] = set()
     if only_globs:
         for pat in only_globs:
             for p in root.glob(pat):
-                if p.is_file(): candidates.add(p.resolve())
+                if p.is_file():
+                    candidates.add(p.resolve())
                 elif p.is_dir():
                     for sub in p.rglob("*"):
-                        if sub.is_file(): candidates.add(sub.resolve())
+                        if sub.is_file():
+                            candidates.add(sub.resolve())
     else:
-        # fallback: inkluder alle filer raskt
         for p in root.rglob("*"):
-            if p.is_file(): candidates.add(p.resolve())
+            if p.is_file():
+                candidates.add(p.resolve())
 
-    # Skip-globs: fjern tidlig
     for pat in skip_globs:
         for p in root.glob(pat):
             if p.is_file() and p.resolve() in candidates:
@@ -114,19 +137,21 @@ def _collect_files(root: Path, includes: List[str], excludes: List[str],
                     if sub.is_file() and rp in candidates:
                         candidates.discard(rp)
 
-    # Inkluder/ekskluder: nøyaktig filtrering
     include_set: set[Path] = set()
     for pat in includes:
         for p in root.glob(pat):
-            if p.is_file(): include_set.add(p.resolve())
+            if p.is_file():
+                include_set.add(p.resolve())
 
     exclude_set: set[Path] = set()
     for pat in excludes:
         for p in root.glob(pat):
-            if p.is_file(): exclude_set.add(p.resolve())
+            if p.is_file():
+                exclude_set.add(p.resolve())
             elif p.exists() and p.is_dir():
                 for sub in p.rglob("*"):
-                    if sub.is_file(): exclude_set.add(sub.resolve())
+                    if sub.is_file():
+                        exclude_set.add(sub.resolve())
 
     files = sorted([p for p in candidates if p in include_set and p not in exclude_set])
     return files
@@ -148,22 +173,34 @@ def _build_framed_block(path: Path, content: str, sha256: str) -> str:
 def _write_chunks(blocks: List[Tuple[Path, str]], out_dir: Path, max_lines: int) -> List[Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     outputs: List[Path] = []
-    buf: List[str] = []; buf_lines = 0; part = 1
+    buf: List[str] = []
+    buf_lines = 0
+    part = 1
+
     def flush():
         nonlocal buf, buf_lines, part
-        if not buf: return
+        if not buf:
+            return
         out_path = out_dir / f"paste_{part:03d}.txt"
         with out_path.open("w", encoding="utf-8") as f:
             f.write("".join(buf))
-        outputs.append(out_path); buf = []; buf_lines = 0
+        outputs.append(out_path)
+        buf = []
+        buf_lines = 0
+
     def count_lines(s: str) -> int:
         return s.count("\n") + (0 if s.endswith("\n") else 1)
+
     for (_path, block) in blocks:
         block_lines = count_lines(block)
         if buf_lines + block_lines > max_lines and buf:
-            flush(); part += 1
-        buf.append(block); buf_lines += block_lines
-    flush(); return outputs
+            flush()
+            part += 1
+        buf.append(block)
+        buf_lines += block_lines
+
+    flush()
+    return outputs
 
 def _create_index(mapping: List[Tuple[Path, Path]], out_dir: Path) -> Path:
     index_path = out_dir / "INDEX.txt"
@@ -172,12 +209,22 @@ def _create_index(mapping: List[Tuple[Path, Path]], out_dir: Path) -> Path:
         current = None
         for out_file, src in mapping:
             if out_file != current:
-                f.write(f"\n## {out_file.name}\n"); current = out_file
+                f.write(f"\n## {out_file.name}\n")
+                current = out_file
             f.write(f"- {src.as_posix()}\n")
     return index_path
 
+def _write_files_list(root: Path, sources: List[Path], out_dir: Path) -> Path:
+    """Skriv FILES.txt med alle inkluderte filer (relative paths)."""
+    files_txt = out_dir / "FILES.txt"
+    rels = [s.relative_to(root).as_posix() for s in sources]
+    rels.sort()
+    with files_txt.open("w", encoding="utf-8") as f:
+        for r in rels:
+            f.write(r + "\n")
+    return files_txt
+
 def _resolve_relative(root: Path, maybe_path: str | None, default_rel: str) -> Path:
-    """Hvorfor: tillat relative stier i JSON; gidder ikke absolute."""
     if not maybe_path:
         return (root / default_rel).resolve()
     p = Path(maybe_path)
@@ -187,7 +234,6 @@ def _resolve_relative(root: Path, maybe_path: str | None, default_rel: str) -> P
 
 def run_paste(cfg: Dict, list_only: bool = False) -> None:
     pcfg: Dict = cfg.get("paste", {})
-    # root default: prosjekt-root (eller ".")
     project_root = Path(cfg.get("project_root", ".")).resolve()
     root = _resolve_relative(project_root, pcfg.get("root", "."), ".")
     out_dir = _resolve_relative(root, pcfg.get("out_dir", "paste_out"), "paste_out")
@@ -198,10 +244,16 @@ def run_paste(cfg: Dict, list_only: bool = False) -> None:
     skip_globs = list(pcfg.get("skip_globs", []))
     max_lines = int(pcfg.get("max_lines", 4000))
     allow_binary = bool(pcfg.get("allow_binary", False))
+    filename_search = bool(pcfg.get("filename_search", False))
+
+    # Filnavn-søk: utvid både include og exclude
+    includes = _apply_filename_search(includes, filename_search)
+    excludes = _apply_filename_search(excludes, filename_search)
 
     sources = _collect_files(root, includes, excludes, only_globs, skip_globs)
     if not sources:
-        print("Ingen filer funnet med de angitte mønstrene."); return
+        print("Ingen filer funnet med de angitte mønstrene.")
+        return
 
     if list_only:
         print(f"{len(sources)} fil(er):")
@@ -241,13 +293,23 @@ def run_paste(cfg: Dict, list_only: bool = False) -> None:
                     mapping.append((out_file, Path(p)))
     index_path = _create_index(mapping, out_dir)
 
+    # Skriv og vis inkluderte filer
+    files_list_path = _write_files_list(root, sources, out_dir)
+
     print(f"Skrev {len(outputs)} output-fil(er) til: {out_dir.as_posix()}")
     for p in outputs:
         with p.open("r", encoding="utf-8") as fh:
             lc = sum(1 for _ in fh)
         print(f" - {p.name}  ({lc} linjer)")
+
     if skipped:
         print("\nHoppet over binær/ikke-UTF8-filer (sett paste.allow_binary=true for å inkludere):")
         for s in skipped:
             print(f" - {s.relative_to(root).as_posix()}")
-    print(f"\nINDEX: {index_path.as_posix()}")
+
+    print("\nInkluderte filer:")
+    for src in sources:
+        print(f" - {src.relative_to(root).as_posix()}")
+
+    print(f"\nFILES: {files_list_path.as_posix()}")
+    print(f"INDEX: {index_path.as_posix()}")

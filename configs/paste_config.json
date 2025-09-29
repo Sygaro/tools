@@ -4,8 +4,9 @@
     "out_dir": "paste_out",
     "max_lines": 4000,
     "allow_binary": false,
-    "include": ["**/*.py", "**/*.js", "**/*.ts", "**/*.css", "**/*.html", "**/*.json", "**/*.md", "**/*.sh"],
-    "exclude": ["**/.git/**", "**/venv/**", "**/node_modules/**", "**/__pycache__/**", "**/.pytest_cache/**", "**/.mypy_cache/**", "**/.DS_Store"],
+    "filename_search": true,
+    "include": ["view.js", "view.background.js"],
+    "exclude": ["**/.git/**", "**/venv/**", "**/node_modules/**", "**/__pycache__/**", "**/.pytest_cache/**", "**/.mypy_cache/**", "app/._.DS_Store", "**/routes/.DS_Store"],
     "only_globs": [],
     "skip_globs": []
   }

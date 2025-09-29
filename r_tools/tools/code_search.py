@@ -1,4 +1,3 @@
-# /home/reidar/tools/r_tools/tools/code_search.py
 from __future__ import annotations
 import os, re
 from dataclasses import dataclass
@@ -42,7 +41,14 @@ def _iter_files(root: Path) -> Iterable[Path]:
         for f in filenames:
             yield Path(dirpath) / f
 
-def run_search(cfg: Dict, terms: List[str] | None, use_color: bool, show_count: bool, max_size: int) -> None:
+def run_search(
+    cfg: Dict,
+    terms: List[str] | None,
+    use_color: bool,
+    show_count: bool,
+    max_size: int,
+    require_all: bool = False,  # ← NYTT
+) -> None:
     sc = SearchConfig(
         project_root=Path(cfg["project_root"]),
         include_extensions=list(cfg["include_extensions"]),
@@ -50,6 +56,7 @@ def run_search(cfg: Dict, terms: List[str] | None, use_color: bool, show_count: 
         exclude_files=list(cfg["exclude_files"]),
         case_insensitive=bool(cfg.get("case_insensitive", True)),
     )
+
     search_terms = terms if terms else list(cfg.get("search_terms", []))
     if not search_terms:
         print("Ingen søketermer. Angi termer eller legg til i config.")
@@ -65,11 +72,14 @@ def run_search(cfg: Dict, terms: List[str] | None, use_color: bool, show_count: 
                 continue
             if file_path.stat().st_size > max_size:
                 continue
+
             matches: List[Tuple[int, str]] = []
             with file_path.open("r", encoding="utf-8", errors="ignore") as f:
                 for idx, line in enumerate(f, 1):
-                    if any(p.search(line) for p in patterns):
+                    has_match = all(p.search(line) for p in patterns) if require_all else any(p.search(line) for p in patterns)
+                    if has_match:
                         matches.append((idx, _highlight(line, patterns, use_color)))
+
             if matches:
                 if show_count:
                     print(f"{Fore.CYAN}{file_path}{Style.RESET_ALL}  (+{len(matches)} treff)")
@@ -78,4 +88,5 @@ def run_search(cfg: Dict, terms: List[str] | None, use_color: bool, show_count: 
                 total_hits += len(matches)
         except Exception as e:
             print(f"{Fore.RED}Feil på {file_path}: {e}{Style.RESET_ALL}")
+
     print(f"{Fore.GREEN}Totalt treff: {total_hits}{Style.RESET_ALL}")
