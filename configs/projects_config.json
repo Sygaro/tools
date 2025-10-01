@@ -2,6 +2,8 @@
   "projects": [
     { "name": "countdown", "path": "/home/reidar/countdown" },
     { "name": "backup_app", "path": "/home/reidar/backup_app" },
-    { "name": "tools",     "path": "/home/reidar/tools" }
+    { "name": "tools",     "path": "/home/reidar/tools" },
+    { "name": "tools_test",     "path": "/home/reidar/tools_test" }
+
   ]
 }

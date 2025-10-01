@@ -1,9 +1,9 @@
 # /home/reidar/tools/r_tools/tools/webui.py
 from __future__ import annotations
-import io
+import io, json
 from contextlib import redirect_stdout
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import TypedDict, Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, Response
@@ -16,25 +16,49 @@ from .format_code import run_format
 from .clean_temp import run_clean
 from .gh_raw import run_gh_raw
 
-TOOLS_ROOT = Path(__file__).resolve().parents[1]
-CONFIG_DIR = TOOLS_ROOT / "configs"
+# Viktig: pek til /tools/configs (ikke r_tools/configs)
+ROOT_DIR = Path(__file__).resolve().parents[2]   # .../tools
+CONFIG_DIR = ROOT_DIR / "configs"
 
-def _load_projects() -> List[Dict[str, str]]:
-    import json
+class ProjectEntry(TypedDict):
+    name: str
+    path: str       # som i JSON (kan være relativ)
+    abs_path: str   # oppløst absolutt path
+    exists: bool    # finnes på disk?
+
+def _load_projects() -> List[ProjectEntry]:
     cfg_path = CONFIG_DIR / "projects_config.json"
     if not cfg_path.is_file():
-        guesses = []
-        for name in ["countdown", "tools"]:
-            p = Path.home() / name
-            if p.exists():
-                guesses.append({"name": name, "path": str(p)})
-        return guesses or [{"name": "current", "path": str(Path.cwd())}]
+        raise FileNotFoundError(f"Fant ikke {cfg_path}")
+
     data = json.loads(cfg_path.read_text(encoding="utf-8"))
-    return list(data.get("projects", []))
+    projects = data.get("projects")
+    if not isinstance(projects, list):
+        raise ValueError(f"{cfg_path}: 'projects' må være en liste")
+
+    out: List[ProjectEntry] = []
+    for i, p in enumerate(projects):
+        if not isinstance(p, dict) or "name" not in p or "path" not in p:
+            raise ValueError(f"{cfg_path}: item[{i}] mangler 'name' eller 'path'")
+
+        raw_path = str(p["path"])
+        base = ROOT_DIR  # relativ path tolkes relativt til tools/
+        abs_path = (Path(raw_path).expanduser()
+                    if Path(raw_path).is_absolute()
+                    else (base / raw_path)).resolve()
+
+        out.append(ProjectEntry(
+            name=str(p["name"]),
+            path=raw_path,
+            abs_path=str(abs_path),
+            exists=abs_path.exists(),
+        ))
+
+    if not out:
+        raise ValueError(f"{cfg_path}: 'projects' er tom")
+    return out
 
 def _load_recipes() -> List[Dict[str, Any]]:
-    """Hvorfor: gi UI-klikkbare forhåndsvalg uten å hardkode i frontend."""
-    import json
     rc = CONFIG_DIR / "recipes_config.json"
     if not rc.is_file():
         return []
@@ -80,7 +104,7 @@ INDEX_HTML = """<!doctype html>
   <h1 style="flex:1">r_tools UI</h1>
   <div>
     <label for="project">Prosjekt</label>
-    <select id="project"></select>
+    <select id="project" title="Defineres i tools/configs/projects_config.json"></select>
   </div>
   <button class="btn" id="refresh">Oppdater</button>
 </header>
@@ -88,7 +112,7 @@ INDEX_HTML = """<!doctype html>
   <section class="card" id="recipes_card">
     <h2>Oppskrifter</h2>
     <div id="recipes"></div>
-    <p class="muted">Klikk for å kjøre med forhåndsvalgte parametere. Oppskrifter kommer fra <code>configs/recipes_config.json</code>.</p>
+    <p class="muted">Oppskrifter kommer fra <code>tools/configs/recipes_config.json</code>.</p>
   </section>
 
   <div class="row">
@@ -162,15 +186,35 @@ async function fetchProjects() {
   const r = await fetch('/api/projects');
   const data = await r.json();
   const sel = document.getElementById('project');
-  const prev = sel.value;
   sel.innerHTML = '';
-  data.projects.forEach(p => {
+
+  if (data.error) {
     const opt = document.createElement('option');
-    opt.value = p.path; opt.textContent = p.name + ' — ' + p.path;
+    opt.value = '';
+    opt.textContent = 'Ingen prosjekter (se konsollen)';
     sel.appendChild(opt);
+    console.warn('Prosjektfeil:', data.error, 'Config:', data.config);
+    alert(`Kunne ikke laste prosjekter.\\n\\n${data.error}\\n\\nForventet fil:\\n${data.config}`);
+    return;
+  }
+
+  const projs = data.projects || [];
+  let firstValid = '';
+  projs.forEach(p => {
+    const opt = document.createElement('option');
+    const badge = p.exists ? "✓" : "⚠";
+    opt.value = p.abs_path;                // bruk absolutt sti ved kjøring
+    opt.textContent = `${badge} ${p.name} — ${p.path}`;
+    opt.title = p.exists ? p.abs_path : `Sti finnes ikke: ${p.abs_path}`;
+    sel.appendChild(opt);
+    if (p.exists && !firstValid) firstValid = p.abs_path;
   });
-  sel.value = prev || (data.projects[0]?.path || '');
-  loadPrefs();
+
+  sel.value = firstValid || (projs[0]?.abs_path || '');
+
+  if (projs.length && projs.every(p => !p.exists)) {
+    alert("Ingen av prosjektene i projects_config.json finnes på disk.\\n\\nSjekk stiene.");
+  }
 }
 
 async function fetchRecipes() {
@@ -261,6 +305,12 @@ function loadPrefs(){
     set('clean_skip', p.clean_skip);
     set('gh_prefix', p.gh_prefix);
   }catch{}
+  document.getElementById('refresh').onclick = async () => {
+  await fetchProjects();
+  await fetchRecipes();
+  loadPrefs(); // re-appliker preferanser for valgt prosjekt
+};
+
 }
 
 ['project','search_terms','search_all','search_case','search_max',
@@ -346,11 +396,19 @@ def index():
 
 @app.get("/api/projects")
 def api_projects():
-    return {"projects": _load_projects()}
+    cfgp = str((CONFIG_DIR / "projects_config.json").resolve())
+    try:
+        projs = _load_projects()
+        return {"projects": projs, "config": cfgp}
+    except Exception as e:
+        return {"projects": [], "error": f"{type(e).__name__}: {e}", "config": cfgp}
 
 @app.get("/api/recipes")
 def api_recipes():
-    return {"recipes": _load_recipes()}
+    try:
+        return {"recipes": _load_recipes()}
+    except Exception:
+        return {"recipes": []}
 
 @app.post("/api/run")
 def api_run(body: RunPayload):
@@ -405,11 +463,10 @@ def api_run(body: RunPayload):
         raise HTTPException(status_code=400, detail=f"Ukjent tool: {tool}")
     except Exception as e:
         return {"error": f"{type(e).__name__}: {e}"}
-    
-# --- Favicon (hindrer 404 i loggen) -----------------------------------------
+
+# Favicon – unngå 404-støy
 @app.get("/favicon.ico")
 def favicon():
-    # Returner en minimal transparent PNG (1x1) – eller bytt til 204 for ingen ikon.
     png_1x1 = (
         b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
         b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\x0bIDATx\x9cc``\x00"
