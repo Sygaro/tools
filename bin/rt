@@ -8,13 +8,19 @@ if [[ ! -d "$VENV" ]]; then
   echo "Oppretter venv i $VENV ..."
   python3 -m venv "$VENV"
   "$VENV/bin/pip" install -U pip
-  if [[ -f "$TOOLS_ROOT/requirements.txt" ]]; then
-    "$VENV/bin/pip" install -r "$TOOLS_ROOT/requirements.txt"
-  fi
+  [[ -f "$TOOLS_ROOT/requirements.txt" ]] && "$VENV/bin/pip" install -r "$TOOLS_ROOT/requirements.txt"
 fi
 
-# Viktig: sørg for at black/ruff i venv finnes i PATH for subprocess
 export PATH="$VENV/bin:${PATH:-}"
 export PYTHONPATH="$TOOLS_ROOT:${PYTHONPATH:-}"
+
+if [[ "${RT_DEBUG:-0}" = "1" ]]; then
+  echo "[rt] sys.executable: $("$VENV/bin/python" - <<'PY'
+import sys, r_tools, inspect
+print(sys.executable)
+print("r_tools @", inspect.getsourcefile(r_tools) or r_tools.__file__)
+PY
+)"
+fi
 
 exec "$VENV/bin/python" -m r_tools.cli "$@"

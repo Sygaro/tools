@@ -1,0 +1,7 @@
+{
+  "projects": [
+    { "name": "countdown", "path": "/home/reidar/countdown" },
+    { "name": "backup_app", "path": "/home/reidar/backup_app" },
+    { "name": "tools",     "path": "/home/reidar/tools" }
+  ]
+}

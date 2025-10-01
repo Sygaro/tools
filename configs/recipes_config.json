@@ -1,0 +1,34 @@
+{
+  "recipes": [
+    {
+      "name": "Search: finn import os + class",
+      "tool": "search",
+      "desc": "AND-søk etter import og class på samme linje",
+      "args": { "terms": ["import\\s+os", "\\bclass\\b"], "all": true, "max_size": 2000000 }
+    },
+    {
+      "name": "Paste: python + md",
+      "tool": "paste",
+      "desc": "Globalt filnavn-søk på README.md og alle .py",
+      "args": { "filename_search": true, "include": ["**/*.py", "README.md"], "exclude": ["**/.git/**","**/venv/**"], "max_lines": 4000 }
+    },
+    {
+      "name": "Format: dry-run",
+      "tool": "format",
+      "desc": "Kjør formattere og cleanup uten å skrive",
+      "args": { "dry_run": true }
+    },
+    {
+      "name": "Clean: pycache+ruff (dry)",
+      "tool": "clean",
+      "desc": "Rydd cache trygt (dry-run)",
+      "args": { "what": ["pycache", "ruff_cache"], "dry_run": true }
+    },
+    {
+      "name": "GH Raw: routes",
+      "tool": "gh-raw",
+      "desc": "List raw-URLer under app/routes",
+      "args": { "path_prefix": "app/routes" }
+    }
+  ]
+}

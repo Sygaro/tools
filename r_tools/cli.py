@@ -1,19 +1,28 @@
 # /home/reidar/tools/r_tools/cli.py
 from __future__ import annotations
+
 import argparse
+import json
+import os
+import subprocess
+import sys
 from pathlib import Path
+from typing import Any, Dict, Optional
+
 from .config import load_config, load_config_info
 from .tools.code_search import run_search
-from .tools.paste_chunks import run_paste
-from .tools.gh_raw import run_gh_raw
+from .tools.clean_temp import run_clean
 from .tools.format_code import run_format
-from .tools.clean_temp import run_clean   # ← viktig for 'clean'
+from .tools.gh_raw import run_gh_raw
+from .tools.paste_chunks import run_paste
+
+VERSION = "0.6.0"
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="rt", description="Tools CLI")
+    p = argparse.ArgumentParser(prog="rt", description="r_tools CLI")
+    p.add_argument("--version", action="store_true", help="Vis versjon og avslutt")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    # search
     sp = sub.add_parser("search", help="Søk i prosjektfiler")
     sp.add_argument("terms", nargs="*", help="Regex-termin(e). Tom → bruk config.")
     sp.add_argument("--project", type=Path)
@@ -25,9 +34,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--no-color", action="store_true")
     sp.add_argument("--count", action="store_true")
     sp.add_argument("--max-size", type=int, default=2_000_000)
-    sp.add_argument("--all", action="store_true", help="Krev at alle termer matcher samme linje (AND-søk)")
+    sp.add_argument("--all", action="store_true", help="Krev at alle termer matcher samme linje")
 
-    # paste
     pp = sub.add_parser("paste", help="Lag innlimingsklare filer (chunks)")
     pp.add_argument("--project", type=Path, help="Overstyr paste.root")
     pp.add_argument("--out", type=Path, help="Overstyr paste.out_dir")
@@ -37,7 +45,6 @@ def build_parser() -> argparse.ArgumentParser:
     pp.add_argument("--exclude", action="append", default=None)
     pp.add_argument("--list-only", action="store_true")
 
-    # gh-raw
     gp = sub.add_parser("gh-raw", help="List raw GitHub-URLer for repo tree")
     gp.add_argument("--user")
     gp.add_argument("--repo")
@@ -45,11 +52,9 @@ def build_parser() -> argparse.ArgumentParser:
     gp.add_argument("--path-prefix", default="")
     gp.add_argument("--json", action="store_true")
 
-    # format
     fp = sub.add_parser("format", help="Kjør prettier/black/ruff ihht config")
     fp.add_argument("--dry-run", action="store_true")
 
-    # clean
     cp = sub.add_parser("clean", help="Slett midlertidige filer/kataloger")
     cp.add_argument("--project", type=Path, help="Overstyr project_root")
     cp.add_argument("--what", nargs="*", choices=[
@@ -61,18 +66,37 @@ def build_parser() -> argparse.ArgumentParser:
     cp.add_argument("--yes", action="store_true", help="Utfør faktisk sletting")
     cp.add_argument("--extra", nargs="*", default=None, help="Tilleggs-globs å slette")
 
-    # list
+    sv = sub.add_parser("serve", help="Start web-UI server")
+    sv.add_argument("--host", default="0.0.0.0")
+    sv.add_argument("--port", type=int, default=8765)
+
     lp = sub.add_parser("list", help="Vis config-kilder/verdier og opprinnelse (diff)")
     lp.add_argument("--tool", choices=["search", "paste", "gh_raw", "format", "clean"], help="Begrens til et verktøy")
     lp.add_argument("--project", type=Path)
+
     return p
+
+def _print_debug_header():
+    if os.environ.get("RT_DEBUG") == "1":
+        try:
+            import r_tools, inspect
+            print(f"[rt] python: {sys.executable}")
+            print(f"[rt] r_tools: {inspect.getsourcefile(r_tools) or r_tools.__file__}")
+        except Exception as e:
+            print(f"[rt] debug error: {e}")
 
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
 
+    if args.version:
+        print(f"r_tools {VERSION}")
+        return
+
+    _print_debug_header()
+
     if args.cmd == "search":
-        cli_overrides = {}
+        cli_overrides: Dict[str, Any] = {}
         if args.ext:
             cli_overrides["include_extensions"] = args.ext
         if args.exclude_dir or args.include_dir or args.exclude_file:
@@ -90,12 +114,12 @@ def main() -> None:
             use_color=not args.no_color,
             show_count=args.count,
             max_size=args.max_size,
-            require_all=args.all,  # ← NYTT
+            require_all=args.all,
         )
         return
 
     if args.cmd == "paste":
-        ov = {"paste": {}}
+        ov: Dict[str, Any] = {"paste": {}}
         if args.out:        ov["paste"]["out_dir"] = str(args.out)
         if args.project:    ov["paste"]["root"] = str(args.project)
         if args.max_lines:  ov["paste"]["max_lines"] = args.max_lines
@@ -122,13 +146,54 @@ def main() -> None:
         return
 
     if args.cmd == "clean":
-        ov = {}
+        ov: Dict[str, Any] = {}
         if args.project: ov["project_root"] = str(args.project)
         if args.extra is not None:
             ov.setdefault("clean", {}); ov["clean"]["extra_globs"] = args.extra
         cfg = load_config("clean_config.json", None, ov)
         run_clean(cfg, only=args.what, skip=args.skip, dry_run=(not args.yes) or args.dry_run)
         return
+
+    if args.cmd == "serve":
+        import signal, time
+        host = getattr(args, "host", "0.0.0.0")
+        port = str(getattr(args, "port", 8765))
+
+        try:
+            import uvicorn  # noqa: F401
+        except Exception as e:
+            print(f"[serve] uvicorn mangler i venv: {e}")
+            print("Tips: /home/reidar/tools/venv/bin/pip install uvicorn fastapi pydantic")
+            sys.exit(1)
+
+        cmd = [
+            sys.executable, "-m", "uvicorn", "r_tools.tools.webui:app",
+            "--host", host, "--port", port, "--log-level", "info"
+        ]
+        print("[serve] Kommando:", " ".join(cmd))
+        print(f"[serve] Starter r_tools UI på http://{host}:{port} (Ctrl+C for å stoppe)")
+
+        # Start barneprosess, og håndter Ctrl+C selv for pen shutdown
+        proc = subprocess.Popen(cmd)
+        try:
+            rc = proc.wait()
+            print(f"[serve] uvicorn avsluttet med kode {rc}")
+            sys.exit(rc)
+        except KeyboardInterrupt:
+            print("\n[serve] Avslutter … (Ctrl+C)")
+            try:
+                proc.send_signal(signal.SIGINT)  # be uvicorn stoppe pent
+                rc = proc.wait(timeout=8)
+            except subprocess.TimeoutExpired:
+                proc.terminate()
+                try:
+                    rc = proc.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    rc = proc.wait()
+            print(f"[serve] Stoppet (exit {rc})")
+            sys.exit(0)
+
 
     if args.cmd == "list":
         tool_to_cfg = {
@@ -137,16 +202,14 @@ def main() -> None:
             "paste": "paste_config.json",
             "gh_raw": "gh_raw_config.json",
             "format": "format_config.json",
-            "clean": "clean_config.json",     # ← lagt til
+            "clean": "clean_config.json",
         }
         cfg, info = load_config_info(tool_to_cfg[args.tool] if args.tool else None,
                                      project_override=args.project)
-
         print("== Kilder ==")
         for k in ["tools_root", "global_config", "tool_config", "project_file", "project_override"]:
             print(f"{k:18}: {info.get(k)}")
 
-        # Utsnitt per tool
         if args.tool == "search":
             eff = {k: cfg.get(k) for k in ["project_root", "include_extensions", "exclude_dirs", "exclude_files", "case_insensitive", "search_terms"]}
             base = "search"
@@ -162,8 +225,7 @@ def main() -> None:
             eff = cfg; base = ""
 
         print("\n== Effektiv config ==")
-        import json as _json
-        print(_json.dumps(eff, indent=2, ensure_ascii=False))
+        print(json.dumps(eff, indent=2, ensure_ascii=False))
 
         print("\n== Opprinnelse (siste skriver vinner) ==")
         prov = info.get("provenance", {})
@@ -172,6 +234,10 @@ def main() -> None:
                 continue
             print(f"{k:40} ← {prov[k]}")
         return
+
+    # Fallback: skulle aldri treffes
+    print(f"Ukjent kommando: {args.cmd!r}")
+    sys.exit(2)
 
 if __name__ == "__main__":
     main()

@@ -2,11 +2,11 @@
   "paste": {
     "root": ".",
     "out_dir": "paste_out",
-    "max_lines": 4000,
+    "max_lines": 2000,
     "allow_binary": false,
     "filename_search": true,
-    "include": ["view.js", "view.background.js"],
-    "exclude": ["**/.git/**", "**/venv/**", "**/node_modules/**", "**/__pycache__/**", "**/.pytest_cache/**", "**/.mypy_cache/**", "app/._.DS_Store", "**/routes/.DS_Store"],
+    "include": ["static/**/diag.*"],
+    "exclude": ["**/.git/**", "**/venv/**", "**/node_modules/**", "**/__pycache__/**", "**/.pytest_cache/**", "**/.mypy_cache/**", "._.DS_Store", ".DS_Store"],
     "only_globs": [],
     "skip_globs": []
   }

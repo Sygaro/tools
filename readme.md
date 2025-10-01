@@ -8,7 +8,7 @@ Et lettvint verktøysett for daglig utvikling på Linux/Raspberry Pi. **r\_tools
 
 ## ✨ Hovedidé
 
-- **Én CLI (**``**)** for alle verktøy.
+- **Én CLI (`rt`)** for alle verktøy.
 - **Felles venv** og **felles config-struktur**.
 - **Per‑prosjekt overrides** via `.r-tools.json` i arbeidskatalogen.
 - Kjør uten å aktivere venv og uten å cd’e inn i repoet.
@@ -21,6 +21,7 @@ Et lettvint verktøysett for daglig utvikling på Linux/Raspberry Pi. **r\_tools
 - `rt paste` – pakk filer i innlimingsklare tekstblokker («chunks») med rammeinfo.
 - `rt gh-raw` – list rå GitHub‑lenker for et repo/branch (ingen `jq`/`curl` nødvendig).
 - `rt format` – kjør `prettier`, `black`, `ruff` etter config.
+- `rt clean` – slett midlertidige/katalog‑cache via trygge filtre.
 - `rt list` – vis effektive config‑verdier og opprinnelse (hvilken fil som «vant»).
 
 ---
@@ -71,7 +72,8 @@ tools/
 │     ├─ code_search.py   # rt search
 │     ├─ paste_chunks.py  # rt paste
 │     ├─ gh_raw.py        # rt gh-raw
-│     └─ format_code.py   # rt format
+│     ├─ format_code.py   # rt format
+│     └─ clean_temp.py    # rt clean
 └─ requirements.txt       # lette Python-avhengigheter
 ```
 
@@ -112,6 +114,24 @@ Konfig lastes i følgende prioritet (sist vinner):
     "prettier": { "enable": true, "globs": ["static/**/*.{html,css,js}"] },
     "black":    { "enable": true, "paths": ["app"] },
     "ruff":     { "enable": true, "args": ["check", "app", "--fix"] }
+  },
+  "clean": {
+    "enable": true,
+    "targets": {
+      "pycache": true,
+      "pytest_cache": true,
+      "mypy_cache": true,
+      "ruff_cache": true,
+      "coverage": true,
+      "build": true,
+      "dist": true,
+      "editor": true,
+      "ds_store": true,
+      "thumbs_db": true,
+      "node_modules": false
+    },
+    "extra_globs": [],
+    "skip_globs": []
   }
 }
 ```
@@ -192,13 +212,36 @@ rt format --dry-run
 
 Kjører `prettier` (via `npx`), `black`, `ruff` dersom de finnes i PATH og er aktivert i config.
 
+### `rt clean` – slett midlertidige filer/kataloger
+
+```bash
+# vis hva som ville blitt slettet (standard)
+rt clean
+
+# slett faktisk (krever --yes)
+rt clean --yes
+
+# begrens til gitte mål (overstyrer config)
+rt clean --what pycache ruff_cache coverage --yes
+
+# hopp over node_modules uansett config
+rt clean --skip node_modules
+
+# tørkekjøring + mer pratsom
+rt clean --dry-run
+```
+
+- Trygg som standard: kjører **dry‑run** med oversikt. Du må eksplisitt bruke `--yes` for å slette.
+- Mål defineres i `clean.targets` i konfig (`true/false`). CLI `--what` kan snevre inn, `--skip` kan utelate.
+- Støtter ekstra mønstre i `clean.extra_globs` og unntak i `clean.skip_globs`.
+
 ---
 
 ## 🧪 Tips & feilsøking
 
 - **JSON‑feil**: `rt list --tool paste` feiler ofte hvis en JSON‑fil er tom/ugyldig. Valider med `jq . <fil>` (om du har `jq`).
 - **PATH**: Sørg for at `/usr/local/bin/rt` peker til repoets `bin/rt`.
-- **Ytelse **``: bruk `only_globs`/`skip_globs` for å redusere søkeområde.
+- **Ytelse**: bruk `only_globs`/`skip_globs` for å redusere søkeområde.
 
 ---
 

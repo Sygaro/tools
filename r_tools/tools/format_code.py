@@ -1,21 +1,30 @@
 # /home/reidar/tools/r_tools/tools/format_code.py
 """
-Formatterings-pipeline for r_tools:
+Formatterings-pipeline:
 - prettier (via npx), black, ruff
-- whitespace-cleanup (kollaps tomlinjer, fjern "unaturlige" tomlinjer i blokker)
-Regler er konservative for å unngå semantikkendringer.
+- Whitespace-cleanup (styrt via config):
+  * Alltid: fjern trailing spaces, normaliser LF + eksakt 1 sluttlinje
+  * Alltid: trim tomlinjer i start/slutt av fil
+  * Alltid: kollaps serier av tomlinjer til maks N (N = cleanup.max_consecutive_blanks, default 1)
+  * Hvis cleanup.compact_blocks=true:
+      - Python: fjern tom linje etter blokksstart (linjer som ender med ':'),
+        unntatt hvis neste ikke-tomme er docstring; fjern tom linje før
+        else/elif/except/finally.
+      - {}-språk: fjern tom linje etter '{' og før '}'/'};'
+  * Hopper over filendelser definert i cleanup.exclude_exts
+Hvorfor: gi kontroll på hvor aggressiv innstramming skal være og hvilke filer som ryddes.
 """
 from __future__ import annotations
 import subprocess
 import shutil
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Iterable, Tuple
+from typing import Dict, List, Optional, Iterable
 
 # ---------- Runner utils ----------
 
 def _which_tool(name: str) -> Optional[str]:
-    """Hvorfor: finn binær i samme venv som sys.executable, ellers i PATH."""
+    """Finn binær i samme venv som sys.executable, ellers i PATH."""
     exe = Path(sys.executable)
     candidate = exe.with_name(name)
     if candidate.exists() and candidate.is_file():
@@ -30,7 +39,12 @@ def _run(cmd: List[str], dry: bool) -> int:
     if dry:
         return 0
     try:
-        return subprocess.run(cmd, check=False).returncode
+        # Viktig: stderr→stdout, så web-UI fanger alt
+        proc = subprocess.run(cmd, check=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        if proc.stdout:
+            # videreskriv til vår stdout (fanges av webui._capture)
+            print(proc.stdout, end="")
+        return proc.returncode
     except FileNotFoundError:
         print(f"Verktøy ikke funnet: {cmd[0]}")
         return 127
@@ -49,92 +63,118 @@ def _write_if_changed(path: Path, new_text: str) -> bool:
         return True
     return False
 
-def _strip_trailing_spaces(lines: List[str]) -> List[str]:
-    return [ln.rstrip() for ln in lines]
-
-def _collapse_blank_runs(lines: List[str]) -> List[str]:
-    out: List[str] = []
-    blank_streak = 0
-    for ln in lines:
-        if ln.strip() == "":
-            blank_streak += 1
-            if blank_streak <= 1:
-                out.append("")
-        else:
-            blank_streak = 0
-            out.append(ln)
-    # trim start
-    while out and out[0] == "":
-        out.pop(0)
-    # trim end
-    while out and out[-1] == "":
-        out.pop()
-    return out
-
-def _py_remove_blank_after_def(lines: List[str]) -> List[str]:
-    """Fjern tom linje rett etter def/class, med docstring-unntak."""
-    out: List[str] = []
-    n = len(lines)
-    i = 0
-    while i < n:
-        out.append(lines[i])
-        cur = lines[i].strip()
-        if cur.endswith(":") and (cur.startswith("def ") or cur.startswith("class ")):
-            # kandidat: neste linje tom?
-            if i + 1 < n and lines[i + 1].strip() == "":
-                # behold tomlinje hvis neste ikke-tomme er docstring
-                j = i + 2
-                while j < n and lines[j].strip() == "":
-                    j += 1
-                if j < n:
-                    nx = lines[j].lstrip()
-                    if not (nx.startswith('"""') or nx.startswith("'''")):
-                        # dropp enkelt tomlinje
-                        i += 1  # hopp over tomlinjen
-        i += 1
-    return out
-
-def _brace_lang_remove_unneeded_blanks(lines: List[str]) -> List[str]:
-    """For språk med {}-blokker: fjern tom etter '{' og før '}'."""
-    out: List[str] = []
-    n = len(lines)
-    for idx, ln in enumerate(lines):
-        stripped = ln.strip()
-        # skip tom linje rett etter '{'
-        if stripped == "" and idx > 0 and lines[idx - 1].strip().endswith("{"):
-            # men behold hvis neste ikke-tomme er '}' (da kan én blank gi luft – vi fjerner uansett her for konsistens)
-            continue
-        # skip tom linje rett før '}'
-        if stripped == "" and idx + 1 < n and lines[idx + 1].strip().startswith("}"):
-            continue
-        out.append(ln)
-    return out
-
 def _normalize_newlines(text: str) -> str:
     t = text.replace("\r\n", "\n").replace("\r", "\n")
-    # sørg for nøyaktig én sluttlinje
     if not t.endswith("\n"):
         t += "\n"
     return t
 
-def _cleanup_text(text: str, ext: str) -> str:
-    """Konservativ whitespace-opprydding per filtype."""
+def _strip_trailing_spaces(lines: List[str]) -> List[str]:
+    return [ln.rstrip() for ln in lines]
+
+def _trim_file_blank_edges(lines: List[str]) -> List[str]:
+    while lines and lines[0].strip() == "":
+        lines.pop(0)
+    while lines and lines[-1].strip() == "":
+        lines.pop()
+    return lines
+
+def _collapse_blank_runs(lines: List[str], keep: int = 1) -> List[str]:
+    out: List[str] = []
+    streak = 0
+    for ln in lines:
+        if ln.strip() == "":
+            streak += 1
+            if streak <= keep:
+                out.append("")
+        else:
+            streak = 0
+            out.append(ln)
+    return out
+
+# ---------- Python-specific (kompakte blokker) ----------
+
+def _is_docstring_start(line: str) -> bool:
+    s = line.lstrip()
+    return s.startswith('"""') or s.startswith("'''")
+
+def _py_remove_blank_after_any_block(lines: List[str]) -> List[str]:
+    """Fjern tomlinje etter ALLE blokkslinjer (slutter med ':'), unntak for docstring."""
+    out: List[str] = []
+    i = 0
+    n = len(lines)
+    while i < n:
+        out.append(lines[i])
+        cur = lines[i].rstrip()
+        if cur.endswith(":"):
+            # dropp én tomlinje hvis neste ikke-tomme ikke er docstring
+            if i + 1 < n and lines[i + 1].strip() == "":
+                j = i + 2
+                while j < n and lines[j].strip() == "":
+                    j += 1
+                if j < n and not _is_docstring_start(lines[j]):
+                    i += 1
+        i += 1
+    return out
+
+def _py_remove_blank_before_block_followups(lines: List[str]) -> List[str]:
+    """Fjern tomlinje før else/elif/except/finally."""
+    followups = ("else:", "elif ", "except", "finally:")
+    out: List[str] = []
+    i = 0
+    n = len(lines)
+    while i < n:
+        if i + 1 < n and lines[i].strip() == "" and any(lines[i + 1].lstrip().startswith(t) for t in followups):
+            i += 1
+            continue
+        out.append(lines[i])
+        i += 1
+    return out
+
+# ---------- {}-languages (kompakte blokker) ----------
+
+def _brace_lang_remove_unneeded_blanks(lines: List[str]) -> List[str]:
+    """Fjern tom linje etter '{' og før '}'/'};'."""
+    out: List[str] = []
+    n = len(lines)
+    for idx, ln in enumerate(lines):
+        stripped = ln.strip()
+        if stripped == "":
+            prev = lines[idx - 1].strip() if idx > 0 else ""
+            nxt = lines[idx + 1].strip() if idx + 1 < n else ""
+            if prev.endswith("{"):
+                continue
+            if nxt.startswith("}") or nxt.startswith("};"):
+                continue
+        out.append(ln)
+    return out
+
+# ---------- Cleanup orchestrator ----------
+
+def _cleanup_text(text: str, ext: str, compact_blocks: bool, max_consecutive_blanks: int) -> str:
+    """Konservativ først; stram opp blokker hvis compact_blocks=True; kollaps tomlinjer til maks N."""
     t = _normalize_newlines(text)
     lines = t.split("\n")
-    # fjern trailing spaces først
+
     lines = _strip_trailing_spaces(lines)
-    # språkspesifikk blokk-logikk
+    lines = _trim_file_blank_edges(lines)
+
     low = ext.lower()
-    if low == ".py":
-        lines = _py_remove_blank_after_def(lines)
-    elif low in {".js", ".ts", ".tsx", ".css", ".scss", ".json", ".c", ".h", ".cpp"}:
-        lines = _brace_lang_remove_unneeded_blanks(lines)
-    # kollaps generelt
-    lines = _collapse_blank_runs(lines)
-    # rejoin + avslutt med newline
+    if compact_blocks:
+        if low == ".py":
+            lines = _py_remove_blank_after_any_block(lines)
+            lines = _py_remove_blank_before_block_followups(lines)
+        elif low in {".js", ".ts", ".tsx", ".css", ".scss", ".json", ".c", ".h", ".cpp"}:
+            lines = _brace_lang_remove_unneeded_blanks(lines)
+
+    # Kollaps serier av tomlinjer til maks N
+    keep_n = max(0, int(max_consecutive_blanks))
+    lines = _collapse_blank_runs(lines, keep=keep_n)
+    lines = _trim_file_blank_edges(lines)
+
     return "\n".join(lines) + "\n"
 
-def _iter_cleanup_targets(project_root: Path, paths: List[str], exts: List[str]) -> Iterable[Path]:
+def _iter_cleanup_targets(project_root: Path, paths: List[str], exts: List[str], exclude_exts: List[str]) -> Iterable[Path]:
     """Finn filer å rydde: rekursivt under oppgitte paths (eller root)."""
     roots: List[Path] = []
     if paths:
@@ -146,13 +186,22 @@ def _iter_cleanup_targets(project_root: Path, paths: List[str], exts: List[str])
         roots.append(project_root)
 
     seen: set[Path] = set()
+    excl = {e.lower() for e in exclude_exts}
+    inc = {e.lower() for e in exts}
+
+    def _want(p: Path) -> bool:
+        sfx = p.suffix.lower()
+        if sfx in excl:
+            return False  # hvorfor: eksplisitt unntak
+        return sfx in inc
+
     for base in roots:
         if base.is_file():
-            if base.suffix.lower() in exts:
+            if _want(base):
                 yield base.resolve()
             continue
         for p in base.rglob("*"):
-            if p.is_file() and p.suffix.lower() in exts:
+            if p.is_file() and _want(p):
                 rp = p.resolve()
                 if rp not in seen:
                     seen.add(rp)
@@ -167,14 +216,22 @@ def _run_cleanup(cfg: Dict, dry_run: bool) -> None:
     project_root = Path(cfg.get("project_root", ".")).resolve()
     paths = list(cln.get("paths", []))
     exts = [e.lower() for e in (cln.get("exts") or _TEXT_EXTS_DEFAULT)]
+    exclude_exts = [e.lower() for e in (cln.get("exclude_exts") or [])]
+    compact_blocks = bool(cln.get("compact_blocks", True))
+    max_consecutive_blanks = int(cln.get("max_consecutive_blanks", 1))
 
     changed = 0
     total = 0
-    for file_path in _iter_cleanup_targets(project_root, paths, exts):
+    for file_path in _iter_cleanup_targets(project_root, paths, exts, exclude_exts):
         total += 1
         try:
             original = _read_text(file_path)
-            new_text = _cleanup_text(original, file_path.suffix)
+            new_text = _cleanup_text(
+                original,
+                file_path.suffix,
+                compact_blocks=compact_blocks,
+                max_consecutive_blanks=max_consecutive_blanks,
+            )
             if original != new_text:
                 print(f"⟳ cleanup {file_path}")
                 if not dry_run:
@@ -191,7 +248,7 @@ def run_format(cfg: Dict, dry_run: bool = False) -> None:
     fmt = cfg.get("format", {})
     rc = 0
 
-    # prettier (valgfritt)
+    # prettier
     pr = fmt.get("prettier", {})
     if pr.get("enable", False):
         npx = _which_tool("npx") or "npx"
@@ -221,7 +278,7 @@ def run_format(cfg: Dict, dry_run: bool = False) -> None:
             print("ruff ikke funnet i PATH – prøver fallback via python -m ruff …")
             rc |= _run([sys.executable, "-m", "ruff"] + rf.get("args", []), dry_run)
 
-    # whitespace cleanup (etter formattere for minst mulig konflikt)
+    # Whitespace-cleanup til slutt
     _run_cleanup(cfg, dry_run)
 
     if rc != 0:
