@@ -18,6 +18,7 @@ from __future__ import annotations
 import subprocess
 import shutil
 import sys
+import fnmatch
 from pathlib import Path
 from typing import Dict, List, Optional, Iterable
 
@@ -40,7 +41,13 @@ def _run(cmd: List[str], dry: bool) -> int:
         return 0
     try:
         # Viktig: stderr→stdout, så web-UI fanger alt
-        proc = subprocess.run(cmd, check=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        proc = subprocess.run(
+            cmd,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
         if proc.stdout:
             # videreskriv til vår stdout (fanges av webui._capture)
             print(proc.stdout, end="")
@@ -51,7 +58,20 @@ def _run(cmd: List[str], dry: bool) -> int:
 
 # ---------- Cleanup: helpers ----------
 
-_TEXT_EXTS_DEFAULT = [".py", ".js", ".ts", ".tsx", ".css", ".scss", ".html", ".json", ".sh", ".c", ".h", ".cpp"]
+_TEXT_EXTS_DEFAULT = [
+    ".py",
+    ".js",
+    ".ts",
+    ".tsx",
+    ".css",
+    ".scss",
+    ".html",
+    ".json",
+    ".sh",
+    ".c",
+    ".h",
+    ".cpp",
+]
 
 def _read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
@@ -124,7 +144,11 @@ def _py_remove_blank_before_block_followups(lines: List[str]) -> List[str]:
     i = 0
     n = len(lines)
     while i < n:
-        if i + 1 < n and lines[i].strip() == "" and any(lines[i + 1].lstrip().startswith(t) for t in followups):
+        if (
+            i + 1 < n
+            and lines[i].strip() == ""
+            and any(lines[i + 1].lstrip().startswith(t) for t in followups)
+        ):
             i += 1
             continue
         out.append(lines[i])
@@ -151,7 +175,9 @@ def _brace_lang_remove_unneeded_blanks(lines: List[str]) -> List[str]:
 
 # ---------- Cleanup orchestrator ----------
 
-def _cleanup_text(text: str, ext: str, compact_blocks: bool, max_consecutive_blanks: int) -> str:
+def _cleanup_text(
+    text: str, ext: str, compact_blocks: bool, max_consecutive_blanks: int
+) -> str:
     """Konservativ først; stram opp blokker hvis compact_blocks=True; kollaps tomlinjer til maks N."""
     t = _normalize_newlines(text)
     lines = t.split("\n")
@@ -164,7 +190,17 @@ def _cleanup_text(text: str, ext: str, compact_blocks: bool, max_consecutive_bla
         if low == ".py":
             lines = _py_remove_blank_after_any_block(lines)
             lines = _py_remove_blank_before_block_followups(lines)
-        elif low in {".js", ".ts", ".tsx", ".css", ".scss", ".json", ".c", ".h", ".cpp"}:
+        elif low in {
+            ".js",
+            ".ts",
+            ".tsx",
+            ".css",
+            ".scss",
+            ".json",
+            ".c",
+            ".h",
+            ".cpp",
+        }:
             lines = _brace_lang_remove_unneeded_blanks(lines)
 
     # Kollaps serier av tomlinjer til maks N
@@ -174,8 +210,41 @@ def _cleanup_text(text: str, ext: str, compact_blocks: bool, max_consecutive_bla
 
     return "\n".join(lines) + "\n"
 
-def _iter_cleanup_targets(project_root: Path, paths: List[str], exts: List[str], exclude_exts: List[str]) -> Iterable[Path]:
-    """Finn filer å rydde: rekursivt under oppgitte paths (eller root)."""
+def _iter_cleanup_targets(
+    project_root: Path,
+    paths: List[str],
+    exts: List[str],
+    exclude_exts: List[str],
+    exclude_dirs: List[str],  # ← NYTT
+    exclude_files: List[str],  # ← NYTT (basenavn eller glob/relativ sti)
+) -> Iterable[Path]:
+    """Finn filer å rydde: rekursivt under oppgitte paths (eller root).
+    Respekterer exclude_dirs og exclude_files fra global_config.json.
+    """
+    # Bygg absolutt liste over ekskluderte kataloger
+    abs_excl_dirs: List[Path] = []
+    for d in exclude_dirs or []:
+        pd = Path(d)
+        abs_excl_dirs.append(
+            (pd if pd.is_absolute() else (project_root / pd)).resolve()
+        )
+
+    def _is_within_excluded(p: Path) -> bool:
+        # sjekk om p ligger under en ekskludert mappe
+        for ex in abs_excl_dirs:
+            try:
+                p.resolve().relative_to(ex)
+                return True
+            except Exception:
+                continue
+        return False
+
+    # For filer: tillat både basenavn og glob over relativ sti
+    rel_globs = [g for g in (exclude_files or []) if any(ch in g for ch in "*?[]")]
+    rel_names = set(
+        g for g in (exclude_files or []) if not any(ch in g for ch in "*?[]")
+    )
+
     roots: List[Path] = []
     if paths:
         for p in paths:
@@ -190,10 +259,23 @@ def _iter_cleanup_targets(project_root: Path, paths: List[str], exts: List[str],
     inc = {e.lower() for e in exts}
 
     def _want(p: Path) -> bool:
+        # ekskluder via dirs
+        if _is_within_excluded(p.parent):
+            return False
         sfx = p.suffix.lower()
         if sfx in excl:
-            return False  # hvorfor: eksplisitt unntak
-        return sfx in inc
+            return False
+        if sfx not in inc:
+            return False
+        # ekskluder via filer (basenavn)
+        if p.name in rel_names:
+            return False
+        # ekskluder via globs over RELATIV sti
+        rel = p.resolve().relative_to(project_root).as_posix()
+        for g in rel_globs:
+            if fnmatch.fnmatch(rel, g):
+                return False
+        return True
 
     for base in roots:
         if base.is_file():
@@ -220,9 +302,20 @@ def _run_cleanup(cfg: Dict, dry_run: bool) -> None:
     compact_blocks = bool(cln.get("compact_blocks", True))
     max_consecutive_blanks = int(cln.get("max_consecutive_blanks", 1))
 
+    # ← HENT fra global_config.json (toppnivå)
+    global_excl_dirs = list(cfg.get("exclude_dirs", []))
+    global_excl_files = list(cfg.get("exclude_files", []))
+
     changed = 0
     total = 0
-    for file_path in _iter_cleanup_targets(project_root, paths, exts, exclude_exts):
+    for file_path in _iter_cleanup_targets(
+        project_root,
+        paths,
+        exts,
+        exclude_exts,
+        exclude_dirs=global_excl_dirs,
+        exclude_files=global_excl_files,
+    ):
         total += 1
         try:
             original = _read_text(file_path)

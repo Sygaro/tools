@@ -7,7 +7,6 @@ from typing import Any, Dict, List
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-
 def _fetch_tree(user: str, repo: str, branch: str, token: str | None) -> Dict[str, Any]:
     """
     Hent Git tree for gitt branch. Bruker GitHub API v3.
@@ -32,7 +31,6 @@ def _fetch_tree(user: str, repo: str, branch: str, token: str | None) -> Dict[st
         raise RuntimeError(msg) from e
     except URLError as e:
         raise RuntimeError(f"Nettverksfeil mot {url}: {e.reason}") from e
-
 
 def run_gh_raw(cfg: Dict, as_json: bool = False) -> None:
     """

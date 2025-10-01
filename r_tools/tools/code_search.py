@@ -1,5 +1,6 @@
 from __future__ import annotations
-import os, re
+import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Dict, Tuple
@@ -76,13 +77,19 @@ def run_search(
             matches: List[Tuple[int, str]] = []
             with file_path.open("r", encoding="utf-8", errors="ignore") as f:
                 for idx, line in enumerate(f, 1):
-                    has_match = all(p.search(line) for p in patterns) if require_all else any(p.search(line) for p in patterns)
+                    has_match = (
+                        all(p.search(line) for p in patterns)
+                        if require_all
+                        else any(p.search(line) for p in patterns)
+                    )
                     if has_match:
                         matches.append((idx, _highlight(line, patterns, use_color)))
 
             if matches:
                 if show_count:
-                    print(f"{Fore.CYAN}{file_path}{Style.RESET_ALL}  (+{len(matches)} treff)")
+                    print(
+                        f"{Fore.CYAN}{file_path}{Style.RESET_ALL}  (+{len(matches)} treff)"
+                    )
                 for ln, content in matches:
                     print(f"{Fore.CYAN}{file_path}:{ln}:{Style.RESET_ALL} {content}")
                 total_hits += len(matches)

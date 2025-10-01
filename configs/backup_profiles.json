@@ -1,0 +1,47 @@
+{
+  "default": "countdown",
+  "profiles": {
+    "countdown": {
+      "project": "countdown",
+      "source": "countdown",
+      "keep": 200,
+      "format": "zip",
+      "dropbox_path": "/Apps/backup_app/countdown",
+      "exclude": ["*.env"],
+      "include_hidden": false,
+      "no_verify": false,
+      "dry_run": false,
+      "verbose": true
+    },
+    "r_tools": {
+      "project": "r_tools",
+      "source": "tools",
+      "keep": 200,
+      "format": "zip",
+      "dropbox_path": "/Apps/backup_app/r_tools",
+      "exclude": ["*.env"],
+      "include_hidden": false,
+      "no_verify": false,
+      "dry_run": false,
+      "verbose": true
+    },
+     "backup_app": {
+      "project": "backup_app",
+      "source": "backup_app",
+      "keep": 200,
+      "format": "zip",
+      "dropbox_path": "/Apps/backup_app/backup_app",
+      "exclude": ["*.env"],
+      "include_hidden": true,
+      "no_verify": false,
+      "dry_run": false,
+      "verbose": true
+    },
+    "garage": {
+      "project": "garasjeport",
+      "source": "garage",
+      "format": "tar.gz",
+      "tag": "nightly"
+    }
+  }
+}

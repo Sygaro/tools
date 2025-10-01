@@ -9,7 +9,7 @@ Integrasjon av make_paste_chunks.py:
 from __future__ import annotations
 from pathlib import Path
 from typing import List, Tuple, Dict
-import hashlib, os
+import hashlib
 
 FRAME_TOP = "===== BEGIN FILE ====="
 FRAME_END = "===== END FILE ====="
@@ -51,9 +51,9 @@ def _brace_expand_one(pattern: str) -> List[str]:
         elif pattern[i] == "}":
             depth -= 1
             if depth == 0:
-                inside = pattern[start+1:i]
+                inside = pattern[start + 1 : i]
                 before = pattern[:start]
-                after = pattern[i+1:]
+                after = pattern[i + 1 :]
                 parts = [p.strip() for p in inside.split(",") if p.strip()]
                 expanded = [before + p + after for p in parts]
                 result: List[str] = []
@@ -89,7 +89,8 @@ def _expand_patterns(patterns: List[str]) -> List[str]:
     seen, uniq = set(), []
     for p in out:
         if p not in seen:
-            seen.add(p); uniq.append(p)
+            seen.add(p)
+            uniq.append(p)
     return uniq
 
 def _apply_filename_search(patterns: List[str], filename_search: bool) -> List[str]:
@@ -104,8 +105,13 @@ def _apply_filename_search(patterns: List[str], filename_search: bool) -> List[s
             out.append(pat)
     return out
 
-def _collect_files(root: Path, includes: List[str], excludes: List[str],
-                   only_globs: List[str] | None, skip_globs: List[str] | None) -> List[Path]:
+def _collect_files(
+    root: Path,
+    includes: List[str],
+    excludes: List[str],
+    only_globs: List[str] | None,
+    skip_globs: List[str] | None,
+) -> List[Path]:
     root = root.resolve()
     includes = _expand_patterns(includes)
     excludes = _expand_patterns(excludes)
@@ -170,7 +176,9 @@ def _build_framed_block(path: Path, content: str, sha256: str) -> str:
     footer = [CODE_END, FRAME_END]
     return "\n".join(header) + "\n" + content + "\n" + "\n".join(footer) + "\n"
 
-def _write_chunks(blocks: List[Tuple[Path, str]], out_dir: Path, max_lines: int) -> List[Path]:
+def _write_chunks(
+    blocks: List[Tuple[Path, str]], out_dir: Path, max_lines: int
+) -> List[Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     outputs: List[Path] = []
     buf: List[str] = []
@@ -191,7 +199,7 @@ def _write_chunks(blocks: List[Tuple[Path, str]], out_dir: Path, max_lines: int)
     def count_lines(s: str) -> int:
         return s.count("\n") + (0 if s.endswith("\n") else 1)
 
-    for (_path, block) in blocks:
+    for _path, block in blocks:
         block_lines = count_lines(block)
         if buf_lines + block_lines > max_lines and buf:
             flush()
@@ -303,7 +311,9 @@ def run_paste(cfg: Dict, list_only: bool = False) -> None:
         print(f" - {p.name}  ({lc} linjer)")
 
     if skipped:
-        print("\nHoppet over binær/ikke-UTF8-filer (sett paste.allow_binary=true for å inkludere):")
+        print(
+            "\nHoppet over binær/ikke-UTF8-filer (sett paste.allow_binary=true for å inkludere):"
+        )
         for s in skipped:
             print(f" - {s.relative_to(root).as_posix()}")
 

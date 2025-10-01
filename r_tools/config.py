@@ -42,7 +42,9 @@ def _flatten(d: Dict[str, Any], prefix: str = "") -> Dict[str, Any]:
             flat[key] = v
     return flat
 
-def _merge_with_provenance(layers: list[tuple[str, Dict[str, Any]]]) -> tuple[Dict[str, Any], Dict[str, str]]:
+def _merge_with_provenance(
+    layers: list[tuple[str, Dict[str, Any]]],
+) -> tuple[Dict[str, Any], Dict[str, str]]:
     merged: Dict[str, Any] = {}
     prov: Dict[str, str] = {}
     for name, cfg in layers:
@@ -52,17 +54,18 @@ def _merge_with_provenance(layers: list[tuple[str, Dict[str, Any]]]) -> tuple[Di
             prov[k] = name  # siste lag vinner
     return merged, prov
 
-def load_config_info(tool_config_name: Optional[str] = None,
-                     project_override: Optional[Path] = None,
-                     cli_overrides: Optional[Dict[str, Any]] = None
-                     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+def load_config_info(
+    tool_config_name: Optional[str] = None,
+    project_override: Optional[Path] = None,
+    cli_overrides: Optional[Dict[str, Any]] = None,
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     info: Dict[str, Any] = {
         "tools_root": str(TOOLS_ROOT),
         "global_config": str(GLOBAL_CONFIG),
         "tool_config": None,
         "project_file": None,
         "project_override": str(project_override) if project_override else None,
-        "cli_overrides": cli_overrides or {}
+        "cli_overrides": cli_overrides or {},
     }
 
     layers: list[tuple[str, Dict[str, Any]]] = []
@@ -96,8 +99,10 @@ def load_config_info(tool_config_name: Optional[str] = None,
     info["provenance"] = prov
     return cfg, info
 
-def load_config(tool_config_name: Optional[str] = None,
-                project_override: Optional[Path] = None,
-                cli_overrides: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def load_config(
+    tool_config_name: Optional[str] = None,
+    project_override: Optional[Path] = None,
+    cli_overrides: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     cfg, _ = load_config_info(tool_config_name, project_override, cli_overrides)
     return cfg

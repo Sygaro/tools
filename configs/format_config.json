@@ -1,13 +1,13 @@
 {
   "format": {
-    "prettier": { "enable": true, "globs": [] },
-    "black":    { "enable": true, "paths": [] },
-    "ruff":     { "enable": true, "args": ["check", "app", "--fix"] },
+    "prettier": { "enable": true, "globs": ["**/*.{html,css,js}"] },
+    "black":    { "enable": true, "paths": ["./"] },
+    "ruff":     { "enable": true, "args": ["check", "./", "--fix"] },
     "cleanup": {
       "enable": true,
-      "paths": ["app", "static"],
+      "paths": [],
       "exts": [".py", ".js", ".ts", ".css", ".html", ".json", ".sh"],
-      "exclude_exts": [".md"],
+      "exclude_exts": [".md","venv/"],
       "compact_blocks": true,
       "max_consecutive_blanks": 1
     }

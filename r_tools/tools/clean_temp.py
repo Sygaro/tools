@@ -28,9 +28,14 @@ def _match_any_name(path: Path, names: Iterable[str]) -> bool:
     s = set(path.parts)
     return any(n in s for n in names)
 
-def _gather_targets(root: Path, enabled: Dict[str, bool],
-                    extra_globs: List[str], skip_globs: List[str],
-                    only: List[str] | None, skip: List[str] | None) -> Tuple[List[Path], List[Path]]:
+def _gather_targets(
+    root: Path,
+    enabled: Dict[str, bool],
+    extra_globs: List[str],
+    skip_globs: List[str],
+    only: List[str] | None,
+    skip: List[str] | None,
+) -> Tuple[List[Path], List[Path]]:
     """
     Returner (dirs, files) for sletting.
     - only: begrens til disse target-keyene
@@ -92,7 +97,9 @@ def _gather_targets(root: Path, enabled: Dict[str, bool],
     def should_skip(path: Path) -> bool:
         for pat in skip_globs or []:
             # tolkes relativt til root
-            for m in (root.glob(pat) if any(ch in pat for ch in "*?[]") else [root / pat]):
+            for m in (
+                root.glob(pat) if any(ch in pat for ch in "*?[]") else [root / pat]
+            ):
                 try:
                     if m.resolve() == path:
                         return True
@@ -130,8 +137,9 @@ def _rm_file(p: Path) -> bool:
     except Exception:
         return False
 
-def run_clean(cfg: Dict, only: List[str] | None, skip: List[str],
-              dry_run: bool = True) -> None:
+def run_clean(
+    cfg: Dict, only: List[str] | None, skip: List[str], dry_run: bool = True
+) -> None:
     root = Path(cfg.get("project_root", ".")).resolve()
     c = cfg.get("clean", {})
     if not c or not c.get("enable", True):
@@ -156,9 +164,10 @@ def run_clean(cfg: Dict, only: List[str] | None, skip: List[str],
         print("Dry-run: ingen filer/kataloger ble slettet. Bruk --yes for å utføre.")
         return
 
-    ok = 0; fail = 0
+    ok = 0
+    fail = 0
     for d in dirs:
-        (_rm_dir(d) and (ok:=ok+1)) or (fail:=fail+1)
+        (_rm_dir(d) and (ok := ok + 1)) or (fail := fail + 1)
     for f in files:
-        (_rm_file(f) and (ok:=ok+1)) or (fail:=fail+1)
+        (_rm_file(f) and (ok := ok + 1)) or (fail := fail + 1)
     print(f"Slettet: {ok} • Feilet: {fail}")
