@@ -1,104 +1,90 @@
-# r\_tools
+# r_tools — små, fleksible dev‑verktøy for prosjekter (RPi m.m.)
 
-Et lettvint verktøysett for daglig utvikling på Linux/Raspberry Pi. **r\_tools** samler flere småverktøy i én konsistent CLI: søk i kode, generer innlimingsklare «paste chunks», list rå GitHub‑lenker og kjør formatteringsverktøy – alt konfigurerbart og kjørbart fra hvilken som helst sti.
+**r_tools** samler flere CLI- og UI‑verktøy i én struktur: søk i kode, bygg "paste chunks", formattering/rydding, sletting av cache, GitHub raw‑lister og integrert **backup**. Alt kan kjøres fra terminal (`rt …`) eller via et lite web‑UI.
 
-> Repo: `Sygaro/tools`
-
----
-
-## ✨ Hovedidé
-
-- **Én CLI (`rt`)** for alle verktøy.
-- **Felles venv** og **felles config-struktur**.
-- **Per‑prosjekt overrides** via `.r-tools.json` i arbeidskatalogen.
-- Kjør uten å aktivere venv og uten å cd’e inn i repoet.
+> Støttet plattform: Linux/macOS (testet på Raspberry Pi 4/5).
 
 ---
 
-## 📦 Innhold
-
-- `rt search` – raskt regex‑søk i prosjektfiler med farge/highlight.
-- `rt paste` – pakk filer i innlimingsklare tekstblokker («chunks») med rammeinfo.
-- `rt gh-raw` – list rå GitHub‑lenker for et repo/branch (ingen `jq`/`curl` nødvendig).
-- `rt format` – kjør `prettier`, `black`, `ruff` etter config.
-- `rt clean` – slett midlertidige/katalog‑cache via trygge filtre.
-- `rt list` – vis effektive config‑verdier og opprinnelse (hvilken fil som «vant»).
-
----
-
-## 🔧 Forutsetninger
-
-- Linux/Unix shell eller macOS.
-- Python 3.10+ installert.
-- (Valgfritt) Verktøy i PATH når brukt:
-  - `npx` (for `prettier`), `black`, `ruff` dersom du bruker `rt format`.
+## Innhold
+- `rt search` – raske søk i prosjektfiler (regex, flere termer, AND/OR)
+- `rt paste` – generer innlimingsklare tekstfiler ("paste_001.txt" …)
+- `rt format` – kjør Prettier/Black/Ruff + valgfri whitespace‑opprydding
+- `rt clean` – trygg sletting av cache/temp (dry‑run som standard)
+- `rt gh-raw` – list rå‑URLer (GitHub API)
+- `rt backup` – integrasjon mot din eksisterende `backup_app/backup.py`
+- `rt serve` – enkel web‑UI for alle verktøy (prosjektvelger + oppskrifter)
 
 ---
 
-## 🚀 Installasjon
-
+## Installasjon
 ```bash
-# klon
-git clone https://github.com/Sygaro/tools.git
+# klon repo
+git clone https://github.com/Sygaro/tools
 cd tools
 
-# gi kjørerett på launcher og legg på PATH
-chmod +x bin/rt
-sudo ln -sf "$(pwd)/bin/rt" /usr/local/bin/rt
+# opprett venv og installer avhengigheter
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 
-# første kjøring oppretter venv og installerer requirements automatisk
-rt list
+# legg rt på PATH (enkelt alias)
+# legg denne i ~/.bashrc eller ~/.zshrc
+alias rt="python -m r_tools.cli"
 ```
 
-> **Merk:** `rt` aktiverer/bruker repoets venv automatisk. Du trenger ikke `source venv/bin/activate`.
+> Alternativt kan du lage en liten wrapper i `/usr/local/bin/rt` som kjører `python -m r_tools.cli` i riktig venv.
 
 ---
 
-## 🗂️ Mappestruktur (kort)
-
+## Katalogstruktur (utdrag)
 ```
 tools/
-├─ bin/rt                 # launcher (aktiverer venv, starter CLI)
-├─ configs/               # globale og verktøyspesifikke JSON-konfiger
-│  ├─ global_config.json
-│  ├─ search_config.json
-│  ├─ paste_config.json
-│  ├─ gh_raw_config.json
-│  └─ format_config.json
-├─ r_tools/               # Python-pakke (selve verktøyene)
-│  ├─ cli.py              # entrypoint for underkommandoer
-│  ├─ config.py           # lasting/merging av config + provenance
+├─ r_tools/
+│  ├─ cli.py
+│  ├─ config.py
 │  └─ tools/
-│     ├─ code_search.py   # rt search
-│     ├─ paste_chunks.py  # rt paste
-│     ├─ gh_raw.py        # rt gh-raw
-│     ├─ format_code.py   # rt format
-│     └─ clean_temp.py    # rt clean
-└─ requirements.txt       # lette Python-avhengigheter
+│     ├─ code_search.py   # search
+│     ├─ paste_chunks.py  # paste
+│     ├─ format_code.py   # format
+│     ├─ clean_temp.py    # clean
+│     ├─ gh_raw.py        # gh-raw
+│     └─ webui.py         # rt serve
+├─ backup_app/            # din eksisterende backup-app
+│  ├─ backup.py
+│  └─ ...
+└─ configs/
+   ├─ global_config.json
+   ├─ search_config.json
+   ├─ paste_config.json
+   ├─ format_config.json
+   ├─ clean_config.json
+   ├─ gh_raw_config.json
+   ├─ backup_config.json        # peker til backup_app/backup.py (valgfri)
+   └─ backup_profiles.json      # profiler + default for backup
 ```
 
 ---
 
-## ⚙️ Konfigurasjon
+## Konfigurasjon
+Alle verktøy leser først `configs/global_config.json` og deretter verktøyspesifikke filer. Prosjekt‑override kan gis i CLI/UI (project‑root).
 
-Konfig lastes i følgende prioritet (sist vinner):
+**Viktig:** JSON kan **ikke** ha kommentarer. Bruk relative stier der det er naturlig.
 
-1. `configs/global_config.json`
-2. *Valgfritt:* verktøyspesifikk (`configs/<tool>_config.json`)
-3. *Valgfritt:* prosjekt‑override i **arbeidskatalogen**: `./.r-tools.json`
-4. *Valgfritt:* CLI‑flagg
-
-> **Viktig:** JSON‑filer må være gyldig JSON – **ingen kommentarer** (`//`, `/* */`)!
-
-### Eksempel: `configs/global_config.json`
-
+### Global eksempel (`configs/global_config.json`)
 ```json
 {
   "project_root": ".",
   "include_extensions": [".py", ".sh", ".c", ".cpp", ".h", ".js", ".ts"],
   "exclude_dirs": ["__pycache__", "build", ".git", "node_modules", "venv"],
   "exclude_files": [],
-  "case_insensitive": true,
+  "case_insensitive": true
+}
+```
+
+### Paste (`configs/paste_config.json`)
+```json
+{
   "paste": {
     "root": ".",
     "out_dir": "paste_out",
@@ -107,28 +93,37 @@ Konfig lastes i følgende prioritet (sist vinner):
     "include": ["**/*.py", "**/*.js", "**/*.ts", "**/*.css", "**/*.html", "**/*.json", "**/*.md", "**/*.sh"],
     "exclude": ["**/.git/**", "**/venv/**", "**/node_modules/**", "**/__pycache__/**", "**/.pytest_cache/**", "**/.mypy_cache/**", "**/.DS_Store"],
     "only_globs": [],
-    "skip_globs": []
-  },
-  "gh_raw": { "user": "Sygaro", "repo": "countdown", "branch": "main", "path_prefix": "" },
+    "skip_globs": [],
+    "filename_search": true
+  }
+}
+```
+
+### Format (`configs/format_config.json`)
+```json
+{
   "format": {
     "prettier": { "enable": true, "globs": ["static/**/*.{html,css,js}"] },
     "black":    { "enable": true, "paths": ["app"] },
-    "ruff":     { "enable": true, "args": ["check", "app", "--fix"] }
-  },
+    "ruff":     { "enable": true, "args": ["check", "app", "--fix"] },
+    "cleanup":  {
+      "enable": true,
+      "paths": ["app", "static"],
+      "exts": [".py", ".js", ".ts", ".css", ".html", ".json", ".sh"],
+      "trim_blanklines": true   
+    }
+  }
+}
+```
+
+### Clean (`configs/clean_config.json`)
+```json
+{
   "clean": {
-    "enable": true,
     "targets": {
-      "pycache": true,
-      "pytest_cache": true,
-      "mypy_cache": true,
-      "ruff_cache": true,
-      "coverage": true,
-      "build": true,
-      "dist": true,
-      "editor": true,
-      "ds_store": true,
-      "thumbs_db": true,
-      "node_modules": false
+      "pycache": true, "pytest_cache": true, "mypy_cache": true, "ruff_cache": true,
+      "coverage": true, "build": true, "dist": true, "editor": true,
+      "ds_store": true, "thumbs_db": true, "node_modules": false
     },
     "extra_globs": [],
     "skip_globs": []
@@ -136,124 +131,108 @@ Konfig lastes i følgende prioritet (sist vinner):
 }
 ```
 
-### Per‑prosjekt override: `./.r-tools.json`
-
+### Backup (`configs/backup_config.json` og `configs/backup_profiles.json`)
 ```json
+// configs/backup_config.json
+{ "backup": { "script": "backup_app/backup.py" } }
+```
+```json
+// configs/backup_profiles.json
 {
-  "project_root": ".",
-  "search_terms": ["\\bclass\\b"],
-  "paste": {
-    "only_globs": ["app/**", "tools/**"],
-    "skip_globs": ["**/dist/**", "**/*.min.js"]
-  }
+  "profiles": {
+    "countdown_zip": {"project": "countdown", "source": "countdown", "dest": "backups", "format": "zip", "keep": 10},
+    "countdown_tgz": {"project": "countdown", "source": "countdown", "dest": "backups", "format": "tar.gz", "keep": 10}
+  },
+  "default": "countdown_zip"
 }
 ```
 
 ---
 
-## 🧰 Bruk
+## Bruk (CLI)
 
-### `rt list` – vis aktiv config og opprinnelse
-
+### Search
 ```bash
-rt list                 # alt
-rt list --tool paste    # kun paste‑delen
-rt list --tool search   # kun search‑delen
+rt search class --all --max-size 2000000
+rt search "import\\s+os, class" --all  # flere termer (AND)
 ```
 
-Viser hvilke filer som ble brukt og «opprinnelse» per nøkkel (hvem overstyrte hva).
-
-### `rt search` – regex‑søk i kode
-
+### Paste
 ```bash
-# bruk konfigurerte søkeord
-rt search
-
-# eksplisitte regex‑termer
-rt search class
-rt search "import\\s+os" --count
-rt search --project /path/til/prosjekt --ext .py .sh --case-sensitive
-```
-
-- Filtrer på filendelser, ekskluder kataloger/filer via config eller CLI.
-- Farge/highlight i terminal (kan skrus av med `--no-color`).
-
-### `rt paste` – generer «paste chunks»
-
-```bash
-# list bare hvilke filer som ville blitt inkludert
 rt paste --list-only
-
-# generer filer til standard out_dir
-rt paste
-
-# overrides
-rt paste --project . --out build/paste --max-lines 3000
+rt paste --out paste_out --max-lines 4000
 ```
 
-- Pakker hver kildefil inn i en ramme: `BEGIN/END FILE`, `PATH`, `LINES`, `SHA256`.
-- Støtter `allow_binary` (hex‑dump), `only_globs` og `skip_globs` for rask filtrering.
-
-### `rt gh-raw` – list rå GitHub‑lenker
-
+### Format
 ```bash
-rt gh-raw
-rt gh-raw --path-prefix app/routes --json
+rt format                # faktisk kjøring
+rt format --dry-run      # simuler
 ```
 
-Returnerer `https://raw.githubusercontent.com/<user>/<repo>/<branch>/<path>` for alle filer i treet (kan filtreres med `path_prefix`).
-
-### `rt format` – kjør formattere
-
+### Clean (trygg som standard)
 ```bash
-rt format
-rt format --dry-run
+rt clean                 # dry-run
+rt clean --yes           # slett faktisk
+rt clean --what pycache ruff_cache --skip node_modules
 ```
 
-Kjører `prettier` (via `npx`), `black`, `ruff` dersom de finnes i PATH og er aktivert i config.
-
-### `rt clean` – slett midlertidige filer/kataloger
-
+### GitHub raw
 ```bash
-# vis hva som ville blitt slettet (standard)
-rt clean
-
-# slett faktisk (krever --yes)
-rt clean --yes
-
-# begrens til gitte mål (overstyrer config)
-rt clean --what pycache ruff_cache coverage --yes
-
-# hopp over node_modules uansett config
-rt clean --skip node_modules
-
-# tørkekjøring + mer pratsom
-rt clean --dry-run
+rt gh-raw --json
 ```
 
-- Trygg som standard: kjører **dry‑run** med oversikt. Du må eksplisitt bruke `--yes` for å slette.
-- Mål defineres i `clean.targets` i konfig (`true/false`). CLI `--what` kan snevre inn, `--skip` kan utelate.
-- Støtter ekstra mønstre i `clean.extra_globs` og unntak i `clean.skip_globs`.
+### Backup
+```bash
+# bruker default-profil fra configs/backup_profiles.json
+rt backup --dry-run --list
+
+# eksplisitt profil
+rt backup --profile countdown_zip --dry-run
+
+# overstyr felter
+rt backup --profile countdown_zip --tag nightly --keep 20
+```
+
+### List effektiv config/meta
+```bash
+rt list                  # alt
+rt list --tool paste
+rt list --tool backup    # viser backup.py + profiler/default
+```
 
 ---
 
-## 🧪 Tips & feilsøking
+## Web‑UI
+Start:
+```bash
+rt serve --host 0.0.0.0 --port 8765
+```
+Funksjoner:
+- Prosjektvelger (fra `configs/projects_config.json`)
+- Oppskrifter (knapper) fra `configs/recipes_config.json`
+- Kort for hver funksjon (Search/Paste/Format/Clean/GH Raw/Backup)
+- **Clean** har trygg modus-bryter (Dry‑run ↔ Apply) med advarsel
+- **Backup** støtter profil‑dropdown (leses fra `configs/backup_profiles.json`)
 
-- **JSON‑feil**: `rt list --tool paste` feiler ofte hvis en JSON‑fil er tom/ugyldig. Valider med `jq . <fil>` (om du har `jq`).
-- **PATH**: Sørg for at `/usr/local/bin/rt` peker til repoets `bin/rt`.
-- **Ytelse**: bruk `only_globs`/`skip_globs` for å redusere søkeområde.
+> Favicon leveres av serveren (ingen 404). UI lagrer felt lokalt (per prosjekt).
 
 ---
 
-## 🛣️ Veikart
-
-- `rt paste --since <git-ref>` (kun endrede filer)
-- `rt search --json` (maskinlesbar output)
-- `rt gh-raw` med token fra env for høyere rate‑limit
+## Feilsøking
+- **Prettier/Black/Ruff ikke funnet**: installer i samme venv eller globalt.
+- **JSON med kommentarer**: fjern `//`/`#` – JSON støtter ikke kommentarer.
+- **GH‑raw 404**: sjekk `gh_raw_config.json` (user/repo/branch) og nett.
+- **Backup**: verifiser `configs/backup_config.json` peker til riktig `backup.py`, og at `configs/backup_profiles.json` finnes.
 
 ---
 
 ## Lisens
+MIT
 
-MIT (se `LICENSE` dersom tilgjengelig).
+---
+
+## Endringslogg (kort)
+- UI/CLI samkjørt for trygge standarder (clean = dry-run, backup = default‑profil)
+- Filnavn‑søk i paste, AND‑søk i search, UI‑oppskrifter
+- Backup‑integrasjon via wrapper (ingen endring i din `backup.py` nødvendig)
 
