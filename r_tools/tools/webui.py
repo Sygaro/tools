@@ -18,8 +18,7 @@ from .gh_raw import run_gh_raw
 from .backup_integration import run_backup, get_backup_info
 from .diag_dropbox import diag_dropbox
 
-# Pek mot /tools/configs (ikke r_tools/configs)
-TOOLS_ROOT = Path(__file__).resolve().parents[2]  # .../tools
+TOOLS_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_DIR = Path(os.environ.get("RTOOLS_CONFIG_DIR", str(TOOLS_ROOT / "configs"))).resolve()
 
 print(f"[webui] TOOLS_ROOT = {TOOLS_ROOT}")
@@ -46,7 +45,7 @@ def _load_projects() -> List[ProjectEntry]:
         if not isinstance(p, dict) or "name" not in p or "path" not in p:
             raise ValueError(f"{cfg_path}: item[{i}] mangler 'name' eller 'path'")
         raw_path = str(p["path"])
-        base = TOOLS_ROOT  # relativ -> fra /tools
+        base = TOOLS_ROOT
         abs_path = (Path(raw_path).expanduser()
                     if Path(raw_path).is_absolute()
                     else (base / raw_path)).resolve()
@@ -68,7 +67,6 @@ def _load_recipes() -> List[Dict[str, Any]]:
     return list(data.get("recipes", []))
 
 def _capture(fn, *args, **kwargs) -> str:
-    """Fanger stdout fra run_* verktøy for UI-visning."""
     buf = io.StringIO()
     with redirect_stdout(buf):
         fn(*args, **kwargs)
@@ -76,7 +74,7 @@ def _capture(fn, *args, **kwargs) -> str:
 
 app = FastAPI(title="r_tools UI", default_response_class=JSONResponse)
 
-# Viktig: rå streng for å unngå Python-escapes i innebygd JS/HTML
+# RÅ streng for å unngå Python-escapes som ødelegger innebygd JS
 INDEX_HTML = r"""<!doctype html>
 <html lang="no">
 <head>
@@ -110,7 +108,7 @@ INDEX_HTML = r"""<!doctype html>
   .lamp.busy{background:#d1a300;box-shadow:0 0 0 6px rgba(209,163,0,.1);animation:pulse 1.2s infinite}
   .lamp.ok{background:#18a957;box-shadow:0 0 0 6px rgba(24,169,87,.12)}
   .lamp.err{background:#d14c4c;box-shadow:0 0 0 6px rgba(209,76,76,.12)}
-  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(209,163,0,.22)}70%{box-shadow:0 0 0 8px rgba(209,163,0,.0)}100%{box-shadow:0 0 0 0 rgba(209,163,0,.0)}}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(209,163,0,.22)}70%{box-shadow:0 0 0 8px rgba(209,163,0,.0)}100%{box-shadow:0 0 0 0 rgba(0,0,0,.0)}}
   .summary{font-size:12px;color:var(--muted);margin:6px 0 0}
   .sum-ok{color:#94f39d}.sum-err{color:#ffa0a0}
 </style>
@@ -118,6 +116,16 @@ INDEX_HTML = r"""<!doctype html>
 <body>
 <header class="inline">
   <h1 style="flex:1">r_tools UI</h1>
+
+  <!-- Global status -->
+  <div class="inline" style="gap:6px;">
+    <span class="muted">Init</span><span class="lamp" id="status_init"></span>
+  </div>
+  <div class="inline" style="gap:6px;">
+    <span class="muted">Verktøy</span><span class="lamp" id="status_global"></span>
+    <span id="status_label" class="muted">(ingen)</span>
+  </div>
+
   <div>
     <label for="project">Prosjekt</label>
     <select id="project" title="Defineres i tools/configs/projects_config.json"></select>
@@ -267,7 +275,6 @@ INDEX_HTML = r"""<!doctype html>
 <script>
 const PREF_KEY = (proj) => `rtools:prefs:${proj}`;
 
-/* ------------------ Statuslampe + busy wrappers ------------------ */
 const STATUS_IDS = {
   search: 'status_search',
   paste: 'status_paste',
@@ -277,54 +284,71 @@ const STATUS_IDS = {
   backup: 'status_backup'
 };
 
-function setStatus(key, state) {
-  const id = STATUS_IDS[key];
-  if (!id) return;
+function setLamp(id, state){
   const el = document.getElementById(id);
   if (!el) return;
-  el.classList.remove('busy', 'ok', 'err');
+  el.classList.remove('busy','ok','err');
   if (state === 'busy') el.classList.add('busy');
   if (state === 'ok')   el.classList.add('ok');
   if (state === 'err')  el.classList.add('err');
 }
 
+function setStatus(key, state) {
+  const id = STATUS_IDS[key];
+  if (!id) return;
+  setLamp(id, state);
+}
+
+function setGlobalStatus(state, label){
+  setLamp('status_global', state);
+  const lab = document.getElementById('status_label');
+  if (lab) lab.textContent = label || '(ingen)';
+}
+
 async function withStatus(key, outId, fn) {
   setStatus(key, 'busy');
+  setGlobalStatus('busy', `Kjører: ${key}`);
   const out = document.getElementById(outId);
   if (out) out.value = '';
   try {
     const result = await fn();
     setStatus(key, 'ok');
+    setGlobalStatus('ok', `Sist: ${key}`);
     return result;
   } catch (e) {
     setStatus(key, 'err');
+    setGlobalStatus('err', `Feil: ${key}`);
     if (out) out.value = String(e?.message || e);
     throw e;
   }
 }
 
-/* ---- FIXED ---- */
+/* Debug-beskjed med join('\n') */
 async function checkDebugConfigBanner(){
   try{
     const r = await fetch('/api/debug-config');
     const d = await r.json();
     const miss = (d.files || []).filter(f => !f.exists);
     if (miss.length){
-      console.warn(
+      const lines = [
         '[webui] Mangler config:',
-        miss.map(m => m.name).join(', '),
-        'CONFIG_DIR=', d.config_dir,
-        'env=', d.env_RTOOLS_CONFIG_DIR
+        ' - ' + miss.map(m => m.name).join('\n - '),
+        `CONFIG_DIR= ${d.config_dir}`,
+        `env RTOOLS_CONFIG_DIR= ${d.env_RTOOLS_CONFIG_DIR}`
+      ];
+      console.warn(lines.join('\n'));
+      alert(
+        [
+          `En eller flere config-filer mangler i ${d.config_dir}:`,
+          ' - ' + miss.map(m => m.name).join('\n - ')
+        ].join('\n')
       );
-      alert(`En eller flere config-filer mangler i ${d.config_dir}:
- - ${miss.map(m => m.name).join('\n - ')}`);
     }
   } catch(e) {
     console.error('debug-config feilet:', e);
   }
 }
 
-/* ------------------ Hjelpere ------------------ */
 function currentProject(){ return document.getElementById('project').value; }
 
 function guessOutputTarget(tool){
@@ -383,7 +407,6 @@ function loadPrefs(){
   }catch{}
 }
 
-/* ------------------ Serverkall ------------------ */
 async function runTool(tool, payload, outId) {
   payload = payload || {};
   const projectPath = currentProject();
@@ -411,8 +434,17 @@ async function fetchProjects() {
     opt.value = '';
     opt.textContent = 'Ingen prosjekter (se konsollen)';
     sel.appendChild(opt);
-    console.warn('Prosjektfeil:', data.error, 'Config:', data.config);
-    alert(`Kunne ikke laste prosjekter.\n\n${data.error}\n\nForventet fil:\n${data.config}`);
+    console.warn(['Prosjektfeil:', data.error, 'Config:', data.config].join('\n'));
+    alert(
+      [
+        'Kunne ikke laste prosjekter.',
+        '',
+        data.error,
+        '',
+        'Forventet fil:',
+        data.config
+      ].join('\n')
+    );
     return;
   }
 
@@ -421,7 +453,7 @@ async function fetchProjects() {
   projs.forEach(p => {
     const opt = document.createElement('option');
     const badge = p.exists ? "✓" : "⚠";
-    opt.value = p.abs_path;                // kjør alltid med absolutt sti
+    opt.value = p.abs_path;
     opt.textContent = `${badge} ${p.name} — ${p.path}`;
     opt.title = p.exists ? p.abs_path : `Sti finnes ikke: ${p.abs_path}`;
     sel.appendChild(opt);
@@ -431,10 +463,16 @@ async function fetchProjects() {
   sel.value = firstValid || (projs[0]?.abs_path || '');
 
   if (projs.length && projs.every(p => !p.exists)) {
-    alert("Ingen av prosjektene i projects_config.json finnes på disk.\n\nSjekk stiene.");
+    alert(
+      [
+        'Ingen av prosjektene i projects_config.json finnes på disk.',
+        '',
+        'Sjekk stiene.'
+      ].join('\n')
+    );
   }
 
-  await fetchCleanConfig(); // last targets for valgt prosjekt
+  await fetchCleanConfig();
 }
 
 async function fetchRecipes() {
@@ -530,7 +568,6 @@ async function fetchBackupProfiles() {
   sel.value = '';
 }
 
-/* ------------------ Clean-modus (radio) ------------------ */
 function currentCleanMode(){
   const dry = document.getElementById('clean_mode_dry').checked;
   return dry ? 'dry' : 'apply';
@@ -550,7 +587,34 @@ function collectCleanTargets() {
   return t;
 }
 
-/* ------------------ Event wiring ------------------ */
+/* Self-check av API/konfig ved init */
+async function selfCheck(){
+  try{
+    const [projRes, dbgRes] = await Promise.all([
+      fetch('/api/projects').then(r=>r.json()),
+      fetch('/api/debug-config').then(r=>r.json())
+    ]);
+    const missing = (dbgRes.files||[]).filter(f=>!f.exists).map(f=>f.name);
+    const projErr = !!projRes.error;
+    if (!projErr && missing.length === 0){
+      setLamp('status_init','ok');
+      console.log('[webui] self-check OK');
+    } else {
+      setLamp('status_init','err');
+      const msgs = [
+        'Self-check feilet:',
+        projErr ? ` - /api/projects: ${projRes.error}` : null,
+        missing.length ? ` - Mangler config: ${missing.join(', ')}` : null
+      ].filter(Boolean);
+      console.warn(msgs.join('\n'));
+    }
+  }catch(e){
+    setLamp('status_init','err');
+    console.error('Self-check exception:', e);
+  }
+}
+
+/* Pref-lagring */
 ['project','search_terms','search_all','search_case','search_max',
  'paste_list_only','paste_filename_search','paste_max','paste_out','paste_include','paste_exclude',
  'format_dry','clean_what','clean_skip','gh_prefix'
@@ -578,7 +642,7 @@ document.getElementById('refresh').onclick = async ()=>{
   loadPrefs();
 };
 
-/* ---- Knapper: alle via withStatus ---- */
+/* Knapper */
 document.getElementById('run_search').onclick = () => withStatus('search','out_search', async () => {
   const terms = document.getElementById('search_terms').value.trim();
   return runTool('search',{
@@ -607,7 +671,6 @@ document.getElementById('save_clean_targets').onclick = async () => {
 };
 
 document.getElementById('run_paste').onclick = () => withStatus('paste','out_paste', async () => {
-  // Støtt både LF og CRLF
   const inc = document.getElementById('paste_include').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
   const exc = document.getElementById('paste_exclude').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
   return runTool('paste',{
@@ -633,7 +696,12 @@ document.getElementById('run_clean').onclick = () => withStatus('clean','out_cle
   const mode = currentCleanMode();
 
   if (mode === 'apply') {
-    const ok = confirm("Dette vil SLETTE filer. Er du sikker på at du vil fortsette?");
+    const ok = confirm(
+      [
+        'Dette vil SLETTE filer.',
+        'Er du sikker på at du vil fortsette?'
+      ].join('\n')
+    );
     if (!ok) return;
   }
 
@@ -687,8 +755,11 @@ if (document.getElementById('run_backup_env')) {
   };
 }
 
-/* ------------------ Init ------------------ */
+/* Init */
 Object.keys(STATUS_IDS).forEach(k => setStatus(k, 'idle'));
+setLamp('status_global', 'idle');
+setLamp('status_init', 'busy');
+
 (async function init(){
   try {
     await fetchProjects();
@@ -696,12 +767,19 @@ Object.keys(STATUS_IDS).forEach(k => setStatus(k, 'idle'));
     await fetchBackupInfo();
     await fetchBackupProfiles();
     await checkDebugConfigBanner();
+    await selfCheck();
     loadPrefs();
     updateCleanWarning();
     console.log("[webui] init OK");
   } catch (e) {
+    setLamp('status_init','err');
     console.error("[webui] init failed:", e);
-    alert("UI-init feilet. Sjekk nettleserkonsollen for detaljer.");
+    alert(
+      [
+        "UI-init feilet.",
+        "Sjekk nettleserkonsollen for detaljer."
+      ].join('\n')
+    );
   }
 })();
 </script>
@@ -746,7 +824,6 @@ def api_clean_targets_get(project: Optional[str] = Query(None)):
 
 @app.post("/api/clean-targets")
 def api_clean_targets_set(project: Optional[str] = Query(None), body: Dict[str, Any] = Body(...)):
-    """Lagre nye targets til tools/configs/clean_config.json (globalt)."""
     targets = body.get("targets") or {}
     if not isinstance(targets, dict):
         raise HTTPException(status_code=400, detail="targets må være et objekt")
@@ -867,7 +944,6 @@ def api_backup_profiles():
         return {"error": f"{type(e).__name__}: {e}",
                 "path": None, "exists": False, "default": None, "names": []}
 
-# Favicon: unngå 404-støy
 @app.get("/favicon.ico")
 def favicon():
     png_1x1 = (
