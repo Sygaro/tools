@@ -21,9 +21,7 @@ import sys
 import fnmatch
 from pathlib import Path
 from typing import Dict, List, Optional, Iterable
-
 # ---------- Runner utils ----------
-
 def _which_tool(name: str) -> Optional[str]:
     """Finn binær i samme venv som sys.executable, ellers i PATH."""
     exe = Path(sys.executable)
@@ -34,7 +32,6 @@ def _which_tool(name: str) -> Optional[str]:
     if found:
         return found
     return None
-
 def _run(cmd: List[str], dry: bool) -> int:
     print("▶", " ".join(cmd))
     if dry:
@@ -55,9 +52,7 @@ def _run(cmd: List[str], dry: bool) -> int:
     except FileNotFoundError:
         print(f"Verktøy ikke funnet: {cmd[0]}")
         return 127
-
 # ---------- Cleanup: helpers ----------
-
 _TEXT_EXTS_DEFAULT = [
     ".py",
     ".js",
@@ -72,33 +67,27 @@ _TEXT_EXTS_DEFAULT = [
     ".h",
     ".cpp",
 ]
-
 def _read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
-
 def _write_if_changed(path: Path, new_text: str) -> bool:
     old = _read_text(path)
     if old != new_text:
         path.write_text(new_text, encoding="utf-8")
         return True
     return False
-
 def _normalize_newlines(text: str) -> str:
     t = text.replace("\r\n", "\n").replace("\r", "\n")
     if not t.endswith("\n"):
         t += "\n"
     return t
-
 def _strip_trailing_spaces(lines: List[str]) -> List[str]:
     return [ln.rstrip() for ln in lines]
-
 def _trim_file_blank_edges(lines: List[str]) -> List[str]:
     while lines and lines[0].strip() == "":
         lines.pop(0)
     while lines and lines[-1].strip() == "":
         lines.pop()
     return lines
-
 def _collapse_blank_runs(lines: List[str], keep: int = 1) -> List[str]:
     out: List[str] = []
     streak = 0
@@ -111,13 +100,10 @@ def _collapse_blank_runs(lines: List[str], keep: int = 1) -> List[str]:
             streak = 0
             out.append(ln)
     return out
-
 # ---------- Python-specific (kompakte blokker) ----------
-
 def _is_docstring_start(line: str) -> bool:
     s = line.lstrip()
     return s.startswith('"""') or s.startswith("'''")
-
 def _py_remove_blank_after_any_block(lines: List[str]) -> List[str]:
     """Fjern tomlinje etter ALLE blokkslinjer (slutter med ':'), unntak for docstring."""
     out: List[str] = []
@@ -136,7 +122,6 @@ def _py_remove_blank_after_any_block(lines: List[str]) -> List[str]:
                     i += 1
         i += 1
     return out
-
 def _py_remove_blank_before_block_followups(lines: List[str]) -> List[str]:
     """Fjern tomlinje før else/elif/except/finally."""
     followups = ("else:", "elif ", "except", "finally:")
@@ -154,9 +139,7 @@ def _py_remove_blank_before_block_followups(lines: List[str]) -> List[str]:
         out.append(lines[i])
         i += 1
     return out
-
 # ---------- {}-languages (kompakte blokker) ----------
-
 def _brace_lang_remove_unneeded_blanks(lines: List[str]) -> List[str]:
     """Fjern tom linje etter '{' og før '}'/'};'."""
     out: List[str] = []
@@ -172,19 +155,15 @@ def _brace_lang_remove_unneeded_blanks(lines: List[str]) -> List[str]:
                 continue
         out.append(ln)
     return out
-
 # ---------- Cleanup orchestrator ----------
-
 def _cleanup_text(
     text: str, ext: str, compact_blocks: bool, max_consecutive_blanks: int
 ) -> str:
     """Konservativ først; stram opp blokker hvis compact_blocks=True; kollaps tomlinjer til maks N."""
     t = _normalize_newlines(text)
     lines = t.split("\n")
-
     lines = _strip_trailing_spaces(lines)
     lines = _trim_file_blank_edges(lines)
-
     low = ext.lower()
     if compact_blocks:
         if low == ".py":
@@ -202,14 +181,11 @@ def _cleanup_text(
             ".cpp",
         }:
             lines = _brace_lang_remove_unneeded_blanks(lines)
-
     # Kollaps serier av tomlinjer til maks N
     keep_n = max(0, int(max_consecutive_blanks))
     lines = _collapse_blank_runs(lines, keep=keep_n)
     lines = _trim_file_blank_edges(lines)
-
     return "\n".join(lines) + "\n"
-
 def _iter_cleanup_targets(
     project_root: Path,
     paths: List[str],
@@ -228,7 +204,6 @@ def _iter_cleanup_targets(
         abs_excl_dirs.append(
             (pd if pd.is_absolute() else (project_root / pd)).resolve()
         )
-
     def _is_within_excluded(p: Path) -> bool:
         # sjekk om p ligger under en ekskludert mappe
         for ex in abs_excl_dirs:
@@ -238,13 +213,11 @@ def _iter_cleanup_targets(
             except Exception:
                 continue
         return False
-
     # For filer: tillat både basenavn og glob over relativ sti
     rel_globs = [g for g in (exclude_files or []) if any(ch in g for ch in "*?[]")]
     rel_names = set(
         g for g in (exclude_files or []) if not any(ch in g for ch in "*?[]")
     )
-
     roots: List[Path] = []
     if paths:
         for p in paths:
@@ -253,11 +226,9 @@ def _iter_cleanup_targets(
                 roots.append(pp)
     else:
         roots.append(project_root)
-
     seen: set[Path] = set()
     excl = {e.lower() for e in exclude_exts}
     inc = {e.lower() for e in exts}
-
     def _want(p: Path) -> bool:
         # ekskluder via dirs
         if _is_within_excluded(p.parent):
@@ -276,7 +247,6 @@ def _iter_cleanup_targets(
             if fnmatch.fnmatch(rel, g):
                 return False
         return True
-
     for base in roots:
         if base.is_file():
             if _want(base):
@@ -288,24 +258,20 @@ def _iter_cleanup_targets(
                 if rp not in seen:
                     seen.add(rp)
                     yield rp
-
 def _run_cleanup(cfg: Dict, dry_run: bool) -> None:
     fmt = cfg.get("format", {})
     cln = fmt.get("cleanup", {})
     if not cln or not cln.get("enable", False):
         return
-
     project_root = Path(cfg.get("project_root", ".")).resolve()
     paths = list(cln.get("paths", []))
     exts = [e.lower() for e in (cln.get("exts") or _TEXT_EXTS_DEFAULT)]
     exclude_exts = [e.lower() for e in (cln.get("exclude_exts") or [])]
     compact_blocks = bool(cln.get("compact_blocks", True))
     max_consecutive_blanks = int(cln.get("max_consecutive_blanks", 1))
-
     # ← HENT fra global_config.json (toppnivå)
     global_excl_dirs = list(cfg.get("exclude_dirs", []))
     global_excl_files = list(cfg.get("exclude_files", []))
-
     changed = 0
     total = 0
     for file_path in _iter_cleanup_targets(
@@ -332,25 +298,28 @@ def _run_cleanup(cfg: Dict, dry_run: bool) -> None:
                 changed += 1
         except Exception as e:
             print(f"Feil under cleanup {file_path}: {e}")
-
     print(f"Cleanup: {changed}/{total} filer endret")
-
 # ---------- Public API ----------
-
 def run_format(cfg: Dict, dry_run: bool = False) -> None:
     fmt = cfg.get("format", {})
     rc = 0
-
     # prettier
     pr = fmt.get("prettier", {})
     if pr.get("enable", False):
         npx = _which_tool("npx") or "npx"
         if shutil.which(npx) or npx != "npx":
             for g in pr.get("globs", []):
-                rc |= _run([npx, "prettier", "--write", g], dry_run)
+                rc |= _run(
+                    [
+                        npx,
+                        "prettier",
+                        "--write",
+                        g,
+                    ],
+                    dry_run,
+                )
         else:
             print("npx ikke funnet – hopper over prettier.")
-
     # black
     bl = fmt.get("black", {})
     if bl.get("enable", False):
@@ -360,7 +329,6 @@ def run_format(cfg: Dict, dry_run: bool = False) -> None:
         else:
             print("black ikke funnet i PATH – prøver fallback via python -m black …")
             rc |= _run([sys.executable, "-m", "black"] + bl.get("paths", []), dry_run)
-
     # ruff
     rf = fmt.get("ruff", {})
     if rf.get("enable", False):
@@ -370,9 +338,7 @@ def run_format(cfg: Dict, dry_run: bool = False) -> None:
         else:
             print("ruff ikke funnet i PATH – prøver fallback via python -m ruff …")
             rc |= _run([sys.executable, "-m", "ruff"] + rf.get("args", []), dry_run)
-
     # Whitespace-cleanup til slutt
     _run_cleanup(cfg, dry_run)
-
     if rc != 0:
         print(f"Noen formattere returnerte kode {rc}")

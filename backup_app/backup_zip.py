@@ -10,21 +10,16 @@ import os
 import sys
 from pathlib import Path
 from typing import List, Optional
-
 HERE = Path(__file__).resolve().parent
-
 def main(argv: Optional[List[str]] = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     SOURCE_DEFAULT = os.getenv("BACKUP_SOURCE_DEFAULT")
     PROJECT_DEFAULT = os.getenv("BACKUP_PROJECT_DEFAULT")
-
     if any(arg.startswith("--") for arg in argv):
         os.execv(sys.executable, [sys.executable, str(HERE / "backup.py"), *argv])
         return 0
-
     version = argv[0] if len(argv) >= 1 else None
     tag = argv[1] if len(argv) >= 2 else None
-
     if not SOURCE_DEFAULT:
         print(
             "[DEPRECATED] Gammelt kall oppdaget. Sett kilde/prosjekt eksplisitt.\n"
@@ -37,7 +32,6 @@ def main(argv: Optional[List[str]] = None) -> int:
             file=sys.stderr,
         )
         return 2
-
     cmd = [sys.executable, str(HERE / "backup.py"), "--source", SOURCE_DEFAULT]
     if PROJECT_DEFAULT:
         cmd += ["--project", PROJECT_DEFAULT]
@@ -47,6 +41,5 @@ def main(argv: Optional[List[str]] = None) -> int:
         cmd += ["--tag", tag]
     os.execv(sys.executable, cmd)
     return 0
-
 if __name__ == "__main__":
     raise SystemExit(main())

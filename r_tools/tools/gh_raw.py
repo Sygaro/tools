@@ -1,12 +1,10 @@
 # /home/reidar/tools/r_tools/tools/gh_raw.py
 from __future__ import annotations
-
 import json
 import os
 from typing import Any, Dict, List
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
-
 def _fetch_tree(user: str, repo: str, branch: str, token: str | None) -> Dict[str, Any]:
     """
     Hent Git tree for gitt branch. Bruker GitHub API v3.
@@ -16,7 +14,6 @@ def _fetch_tree(user: str, repo: str, branch: str, token: str | None) -> Dict[st
     headers = {"User-Agent": "r_tools/gh_raw"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
-
     req = Request(url, headers=headers)
     try:
         with urlopen(req, timeout=30) as resp:
@@ -31,7 +28,6 @@ def _fetch_tree(user: str, repo: str, branch: str, token: str | None) -> Dict[st
         raise RuntimeError(msg) from e
     except URLError as e:
         raise RuntimeError(f"Nettverksfeil mot {url}: {e.reason}") from e
-
 def run_gh_raw(cfg: Dict, as_json: bool = False) -> None:
     """
     Les 'gh_raw' fra cfg og skriv raw.githubusercontent-URLer for alle blobs i treet.
@@ -43,17 +39,14 @@ def run_gh_raw(cfg: Dict, as_json: bool = False) -> None:
     branch = gh.get("branch", "main")
     path_prefix = (gh.get("path_prefix") or "").rstrip("/")
     token = os.environ.get("GITHUB_TOKEN")
-
     if not user or not repo:
         print("gh_raw: mangler 'user' eller 'repo' i config.")
         return
-
     tree = _fetch_tree(user, repo, branch, token)
     nodes: List[Dict[str, Any]] = list(tree.get("tree", []))
     if not nodes:
         print("gh_raw: tomt tre eller mangler 'tree' i responsen.")
         return
-
     base = f"https://raw.githubusercontent.com/{user}/{repo}/{branch}/"
     out: List[str] = []
     for node in nodes:
@@ -65,7 +58,6 @@ def run_gh_raw(cfg: Dict, as_json: bool = False) -> None:
                 out.append(base + p)
         else:
             out.append(base + p)
-
     if as_json:
         print(json.dumps(out, indent=2))
     else:

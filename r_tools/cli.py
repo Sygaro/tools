@@ -1,6 +1,5 @@
 # /home/reidar/tools/r_tools/cli.py
 from __future__ import annotations
-
 import argparse
 import json
 import os
@@ -8,21 +7,17 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict
-
 from .config import load_config, load_config_info
 from .tools.code_search import run_search
 from .tools.clean_temp import run_clean
 from .tools.format_code import run_format
 from .tools.gh_raw import run_gh_raw
 from .tools.paste_chunks import run_paste
-
 VERSION = "0.6.0"
-
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="rt", description="r_tools CLI")
     p.add_argument("--version", action="store_true", help="Vis versjon og avslutt")
     sub = p.add_subparsers(dest="cmd", required=True)
-
     # ---- search ----
     sp = sub.add_parser("search", help="Søk i prosjektfiler")
     sp.add_argument("terms", nargs="*", help="Regex-termin(e). Tom → bruk config.")
@@ -38,7 +33,6 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument(
         "--all", action="store_true", help="Krev at alle termer matcher samme linje"
     )
-
     # ---- paste ----
     pp = sub.add_parser("paste", help="Lag innlimingsklare filer (chunks)")
     pp.add_argument("--project", type=Path, help="Overstyr paste.root")
@@ -48,7 +42,6 @@ def build_parser() -> argparse.ArgumentParser:
     pp.add_argument("--include", action="append", default=None)
     pp.add_argument("--exclude", action="append", default=None)
     pp.add_argument("--list-only", action="store_true")
-
     # ---- gh-raw ----
     gp = sub.add_parser("gh-raw", help="List raw GitHub-URLer for repo tree")
     gp.add_argument("--user")
@@ -56,11 +49,9 @@ def build_parser() -> argparse.ArgumentParser:
     gp.add_argument("--branch")
     gp.add_argument("--path-prefix", default="")
     gp.add_argument("--json", action="store_true")
-
     # ---- format ----
     fp = sub.add_parser("format", help="Kjør prettier/black/ruff ihht config")
     fp.add_argument("--dry-run", action="store_true")
-
     # ---- clean ----
     cp = sub.add_parser("clean", help="Slett midlertidige filer/kataloger")
     cp.add_argument("--project", type=Path, help="Overstyr project_root")
@@ -88,12 +79,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cp.add_argument("--yes", action="store_true", help="Utfør faktisk sletting")
     cp.add_argument("--extra", nargs="*", default=None, help="Tilleggs-globs å slette")
-
     # ---- serve ----
     sv = sub.add_parser("serve", help="Start web-UI server")
     sv.add_argument("--host", default="0.0.0.0")
     sv.add_argument("--port", type=int, default=8765)
-
     # ---- backup ----
     bp = sub.add_parser(
         "backup", help="Kjør backup_app/backup.py med r_tools-integrasjon"
@@ -116,7 +105,14 @@ def build_parser() -> argparse.ArgumentParser:
     bp.add_argument("--verbose", action="store_true")
     bp.add_argument("--dropbox-path")
     bp.add_argument("--dropbox-mode", choices=["add", "overwrite"])
-
+    bp.add_argument(
+        "--wizard",
+        action="store_true",
+        help="Kjør Dropbox-oppsett (refresh token) og avslutt",
+    )
+    dg = sub.add_parser("diag", help="Diagnoseverktøy")
+    dg_sub = dg.add_subparsers(dest="diag_cmd", required=True)
+    dg_dbx = dg_sub.add_parser("dropbox", help="Sjekk .env + Dropbox OAuth refresh")
     # ---- list ----
     lp = sub.add_parser("list", help="Vis effektiv config / meta-info")
     lp.add_argument(
@@ -129,31 +125,24 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="Prosjekt-root for evaluering (overstyrer project_root)",
     )
-
     return p
-
 def _print_debug_header():
     if os.environ.get("RT_DEBUG") == "1":
         try:
             import r_tools
             import inspect
-
             print(f"[rt] python: {sys.executable}")
             print(f"[rt] r_tools: {inspect.getsourcefile(r_tools) or r_tools.__file__}")
         except Exception as e:
             print(f"[rt] debug error: {e}")
-
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
-
     if args.version:
         print(f"r_tools {VERSION}")
         return
-
     _print_debug_header()
     tools_root = Path(__file__).resolve().parents[1]
-
     if args.cmd == "search":
         cli_overrides: Dict[str, Any] = {}
         if args.ext:
@@ -165,7 +154,6 @@ def main() -> None:
             cli_overrides["exclude_files"] += args.exclude_file
         if args.case_sensitive:
             cli_overrides["case_insensitive"] = False
-
         cfg = load_config("search_config.json", args.project, cli_overrides or None)
         run_search(
             cfg=cfg,
@@ -176,7 +164,6 @@ def main() -> None:
             require_all=args.all,
         )
         return
-
     if args.cmd == "paste":
         ov: Dict[str, Any] = {"paste": {}}
         if args.out:
@@ -194,7 +181,6 @@ def main() -> None:
         cfg = load_config("paste_config.json", None, ov)
         run_paste(cfg, list_only=args.list_only)
         return
-
     if args.cmd == "gh-raw":
         ov = {"gh_raw": {}}
         if args.user:
@@ -208,12 +194,10 @@ def main() -> None:
         cfg = load_config("gh_raw_config.json", None, ov)
         run_gh_raw(cfg, as_json=args.json)
         return
-
     if args.cmd == "format":
         cfg = load_config("format_config.json")
         run_format(cfg, dry_run=args.dry_run)
         return
-
     if args.cmd == "clean":
         ov: Dict[str, Any] = {}
         if args.project:
@@ -222,18 +206,14 @@ def main() -> None:
             ov.setdefault("clean", {})
             ov["clean"]["extra_globs"] = args.extra
         cfg = load_config("clean_config.json", None, ov)
-
         perform = bool(args.yes)
         dry_run = not perform
         if args.dry_run:
             dry_run = True
-
         run_clean(cfg, only=args.what, skip=args.skip, dry_run=dry_run)
         return
-
     if args.cmd == "backup":
         from .tools.backup_integration import run_backup
-
         ov: Dict[str, Any] = {}
         for k in [
             "config",
@@ -267,17 +247,25 @@ def main() -> None:
             ov["exclude"] = args.exclude
         if args.keep is not None:
             ov["keep"] = args.keep
-
+        if args.wizard:
+            from .tools.backup_wizard import run_backup_wizard
+            rc = run_backup_wizard()
+            sys.exit(rc)
         rc, out = run_backup(ov)
         print(out, end="" if out.endswith("\n") else "\n")
         sys.exit(rc)
-
+    if args.cmd == "diag":
+        if args.diag_cmd == "dropbox":
+            from .tools.diag_dropbox import diag_dropbox
+            rc, text = diag_dropbox()
+            print(text, end="")
+            sys.exit(rc)
+        print("Ukjent diag-kommando")
+        sys.exit(2)
     if args.cmd == "serve":
         import signal
-
         host = getattr(args, "host", "0.0.0.0")
         port = str(getattr(args, "port", 8765))
-
         try:
             import uvicorn  # noqa: F401
         except Exception as e:
@@ -286,7 +274,6 @@ def main() -> None:
                 "Tips: /home/reidar/tools/venv/bin/pip install uvicorn fastapi pydantic"
             )
             sys.exit(1)
-
         cmd = [
             sys.executable,
             "-m",
@@ -303,7 +290,6 @@ def main() -> None:
         print(
             f"[serve] Starter r_tools UI på http://{host}:{port} (Ctrl+C for å stoppe)"
         )
-
         proc = subprocess.Popen(cmd)
         try:
             rc = proc.wait()
@@ -323,12 +309,10 @@ def main() -> None:
                     rc = proc.wait()
             print(f"[serve] Stoppet (exit {rc})")
             sys.exit(0)
-
     if args.cmd == "list":
         # Egen: backup meta + profiler
         if args.tool == "backup":
             from .tools.backup_integration import get_backup_info
-
             info_b = get_backup_info()
             print("== Kilder ==")
             print(f"tools_root        : {tools_root}")
@@ -343,7 +327,6 @@ def main() -> None:
             if names:
                 print("profiles_names    :", ", ".join(names))
             return
-
         # Ordinær config-visning
         tool_to_cfg = {
             None: None,
@@ -356,7 +339,6 @@ def main() -> None:
         cfg, info = load_config_info(
             tool_to_cfg[args.tool] if args.tool else None, project_override=args.project
         )
-
         print("== Kilder ==")
         for k in [
             "tools_root",
@@ -366,7 +348,6 @@ def main() -> None:
             "project_override",
         ]:
             print(f"{k:18}: {info.get(k)}")
-
         if args.tool == "search":
             eff = {
                 k: cfg.get(k)
@@ -395,10 +376,8 @@ def main() -> None:
         else:
             eff = cfg
             base = ""
-
         print("\n== Effektiv config ==")
         print(json.dumps(eff, indent=2, ensure_ascii=False))
-
         print("\n== Opprinnelse (siste skriver vinner) ==")
         prov = info.get("provenance", {})
         for k in sorted(prov):
@@ -406,9 +385,7 @@ def main() -> None:
                 continue
             print(f"{k:40} ← {prov[k]}")
         return
-
     print(f"Ukjent kommando: {args.cmd!r}")
     sys.exit(2)
-
 if __name__ == "__main__":
     main()

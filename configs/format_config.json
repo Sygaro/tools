@@ -9,7 +9,7 @@
       "exts": [".py", ".js", ".ts", ".css", ".html", ".json", ".sh"],
       "exclude_exts": [".md","venv/"],
       "compact_blocks": true,
-      "max_consecutive_blanks": 1
+      "max_consecutive_blanks": 0
     }
   }
 }
