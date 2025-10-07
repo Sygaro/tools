@@ -1,0 +1,22 @@
+{
+  "clean": {
+    "enable": true,
+    "targets": {
+      "build": true,
+      "coverage": true,
+      "dist": true,
+      "ds_store": true,
+      "editor": true,
+      "mypy_cache": true,
+      "node_modules": false,
+      "pycache": true,
+      "pytest_cache": true,
+      "ruff_cache": false,
+      "thumbs_db": false
+    },
+    "extra_globs": [
+      "._.DS_Store"
+    ],
+    "skip_globs": []
+  }
+}

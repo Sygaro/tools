@@ -1,0 +1,15 @@
+{
+  "format": {
+    "prettier": { "enable": true, "globs": ["**/*.{html,css,js}"] },
+    "black":    { "enable": true, "paths": ["./"] },
+    "ruff":     { "enable": true, "args": ["check", "./", "--fix"] },
+    "cleanup": {
+      "enable": true,
+      "paths": [],
+      "exts": [".py", ".js", ".ts", ".css", ".html", ".json", ".sh"],
+      "exclude_exts": [".md","venv/"],
+      "compact_blocks": true,
+      "max_consecutive_blanks": 0
+    }
+  }
+}

@@ -1,3 +1,1 @@
-{
-  "search_terms": ["\\bTODO\\b", "\\bFIXME\\b"]
-}
+{ "search_terms": ["\\bTODO\\b", "\\bFIXME\\b"] }

@@ -1,9 +1,6 @@
 {
   "backup": {
     "script": "backup_app/backup.py",
-    "defaults": {
-      "format": "zip",
-      "verbose": true
-    }
+    "defaults": { "format": "zip", "verbose": true }
   }
 }
