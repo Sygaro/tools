@@ -12,7 +12,7 @@
       "pycache": true,
       "pytest_cache": true,
       "ruff_cache": false,
-      "thumbs_db": true
+      "thumbs_db": false
     },
     "extra_globs": [
       "._.DS_Store"

@@ -1,7 +1,27 @@
 {
   "project_root": ".",
-  "include_extensions": [".py", ".sh", ".c", ".cpp", ".h", ".js", ".ts", ".css", ".html"],
-  "exclude_dirs": ["__pycache__", "build", ".git", "node_modules", "venv"],
-  "exclude_files": ["._.DS_Store"],
-  "case_insensitive": true
+  "include_extensions": [
+    ".py",
+    ".sh",
+    ".c",
+    ".cpp",
+    ".h",
+    ".js",
+    ".ts",
+    ".css",
+    ".html"
+  ],
+  "exclude_dirs": [
+    "__pycache__",
+    "build",
+    ".git",
+    "node_modules",
+    "venv"
+  ],
+  "exclude_files": [
+    "._.DS_Store"
+  ],
+  "case_insensitive": true,
+  "default_project": "/home/reidar/countdown",
+  "default_tool": "search"
 }
