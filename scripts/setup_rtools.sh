@@ -124,7 +124,7 @@ if ! grep -qE '(^|\s)PATH=.*/\.local/bin' "$BASHRC" 2>/dev/null; then
   {
     echo ''
     echo '# sørg for at lokale bin-skript er i PATH'
-    echo 'export PATH="$HOME/.local/bin:$PATH"'
+    echo 'export PATH="$HOME/bin:$PATH"'
   } >> "$BASHRC"
   chown "$USER_NAME":"$USER_NAME" "$BASHRC"
   ok "La til ~/.local/bin i PATH i .bashrc (ny terminal for effekt)."
@@ -162,7 +162,7 @@ JSON
       "no_verify": false, "dry_run": false, "verbose": true },
     "r_tools": { "project": "r_tools", "source": "tools", "keep": 200, "format": "zip",
       "dropbox_path": "/Apps/backup_app/r_tools", "exclude": ["*.env"], "include_hidden": false,
-      "no_verify": false, "dry_run": false, "verbose": true },
+      "no_verify": false, "dry_run": false, "verbose": true }
   }
 }
 JSON
