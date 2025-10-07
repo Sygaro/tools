@@ -100,38 +100,27 @@ if ! grep -q 'RTOOLS_CONFIG_DIR=' "$BASHRC" 2>/dev/null; then
 else
   ok "RTOOLS_CONFIG_DIR finnes allerede i .bashrc."
 fi
-# ───────────── rt-kommando (bruker-lokal shim) ─────────────
-USER_LOCAL_BIN="$USER_HOME/.local/bin"
-install -d -m 0755 -o "$USER_NAME" -g "$USER_NAME" "$USER_LOCAL_BIN"
+# ───────────── rt-kommando ─────────────
+# ───────────── Bruk prosjektets bin/rt ─────────────
+RT_PROJECT="$TOOLS_DIR/bin/rt"
 
-RT_SHIM="$USER_LOCAL_BIN/rt"
-cat > "$RT_SHIM" <<'SH'
-#!/usr/bin/env bash
-# r_tools CLI shim
-# Denne kjører venv'ens python mot r_tools.cli slik at du slipper å aktivere venv
-VENV_PY="__VENV_PY__"
-exec "$VENV_PY" -m r_tools.cli "$@"
-SH
-# fyll inn riktig venv-path i shim
-sed -i "s|__VENV_PY__|$VENV_DIR/bin/python|g" "$RT_SHIM"
-chown "$USER_NAME":"$USER_NAME" "$RT_SHIM"
-chmod 0755 "$RT_SHIM"
-ok "Opprettet bruker-lokal rt: $RT_SHIM"
-
-# Sørg for at ~/.local/bin er på PATH i bashrc
-BASHRC="$USER_HOME/.bashrc"
-if ! grep -qE '(^|\s)PATH=.*/\.local/bin' "$BASHRC" 2>/dev/null; then
-  {
-    echo ''
-    echo '# sørg for at lokale bin-skript er i PATH'
-    echo 'export PATH="$HOME/bin:$PATH"'
-  } >> "$BASHRC"
-  chown "$USER_NAME":"$USER_NAME" "$BASHRC"
-  ok "La til ~/.local/bin i PATH i .bashrc (ny terminal for effekt)."
+if [[ ! -x "$RT_PROJECT" ]]; then
+  if [[ -f "$RT_PROJECT" ]]; then
+    chmod +x "$RT_PROJECT"
+  else
+    echo "✗ Fant ikke $RT_PROJECT. Sørg for at repoet inneholder bin/rt." >&2
+    exit 1
+  fi
 fi
 
+# Lag bruker-lokal symlink ~/.local/bin/rt -> $TOOLS_DIR/bin/rt
+USER_LOCAL_BIN="$USER_HOME/tools/bin"
+install -d -m 0755 -o "$USER_NAME" -g "$USER_NAME" "$USER_LOCAL_BIN"
+
+RT_LINK="$USER_LOCAL_BIN/rt"
+
 # Tilby system-wide symlink (valgfritt)
-if ask_yn "Opprette system-wide symlink /usr/local/bin/rt også?" n; then
+if ask_yn "Opprette system-wide symlink /usr/local/bin/rt også?" y; then
   ln -sf "$RT_SHIM" /usr/local/bin/rt
   ok "Laget /usr/local/bin/rt → $RT_SHIM"
 fi
