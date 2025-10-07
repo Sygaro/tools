@@ -27,6 +27,11 @@ USER_SHELL="$(getent passwd "$USER_NAME" | cut -d: -f7)"
 
 as_user() { sudo -u "$USER_NAME" -H bash -lc "$*"; }
 
+# ---------- sanity ----------
+command -v python3 >/dev/null || { err "python3 mangler (sudo apt-get install -y python3 python3-venv)"; exit 1; }
+command -v curl >/dev/null || warn "curl mangler – anbefalt for diagnose."
+
+
 # ───────────── paths ─────────────
 if [[ -f "./requirements.txt" && -d "./r_tools" ]]; then
   TOOLS_DIR="$(pwd)"
@@ -94,6 +99,41 @@ if ! grep -q 'RTOOLS_CONFIG_DIR=' "$BASHRC" 2>/dev/null; then
   ok "Miljøvariabler lagt til i .bashrc (åpne ny terminal for effekt)."
 else
   ok "RTOOLS_CONFIG_DIR finnes allerede i .bashrc."
+fi
+# ───────────── rt-kommando (bruker-lokal shim) ─────────────
+USER_LOCAL_BIN="$USER_HOME/.local/bin"
+install -d -m 0755 -o "$USER_NAME" -g "$USER_NAME" "$USER_LOCAL_BIN"
+
+RT_SHIM="$USER_LOCAL_BIN/rt"
+cat > "$RT_SHIM" <<'SH'
+#!/usr/bin/env bash
+# r_tools CLI shim
+# Denne kjører venv'ens python mot r_tools.cli slik at du slipper å aktivere venv
+VENV_PY="__VENV_PY__"
+exec "$VENV_PY" -m r_tools.cli "$@"
+SH
+# fyll inn riktig venv-path i shim
+sed -i "s|__VENV_PY__|$VENV_DIR/bin/python|g" "$RT_SHIM"
+chown "$USER_NAME":"$USER_NAME" "$RT_SHIM"
+chmod 0755 "$RT_SHIM"
+ok "Opprettet bruker-lokal rt: $RT_SHIM"
+
+# Sørg for at ~/.local/bin er på PATH i bashrc
+BASHRC="$USER_HOME/.bashrc"
+if ! grep -qE '(^|\s)PATH=.*/\.local/bin' "$BASHRC" 2>/dev/null; then
+  {
+    echo ''
+    echo '# sørg for at lokale bin-skript er i PATH'
+    echo 'export PATH="$HOME/.local/bin:$PATH"'
+  } >> "$BASHRC"
+  chown "$USER_NAME":"$USER_NAME" "$BASHRC"
+  ok "La til ~/.local/bin i PATH i .bashrc (ny terminal for effekt)."
+fi
+
+# Tilby system-wide symlink (valgfritt)
+if ask_yn "Opprette system-wide symlink /usr/local/bin/rt også?" n; then
+  ln -sf "$RT_SHIM" /usr/local/bin/rt
+  ok "Laget /usr/local/bin/rt → $RT_SHIM"
 fi
 
 # ───────────── configs: sjekk & evt. generer (as root, deretter chown) ─────────────
@@ -262,6 +302,7 @@ if ask_yn "Oppdatere sti til backup.py i backup_config.json?" n; then
   chown "$USER_NAME":"$USER_NAME" "$CONFIG_DIR/backup_config.json"
   ok "backup_config.json oppdatert."
 fi
+
 
 # ───────────── Dropbox wizard (as user) ─────────────
 import_env_lines(){
