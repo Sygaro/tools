@@ -121,8 +121,8 @@ RT_LINK="$USER_LOCAL_BIN/rt"
 
 # Tilby system-wide symlink (valgfritt)
 if ask_yn "Opprette system-wide symlink /usr/local/bin/rt også?" y; then
-  ln -sf "$RT_SHIM" /usr/local/bin/rt
-  ok "Laget /usr/local/bin/rt → $RT_SHIM"
+  ln -sf "$RT_LINK" /usr/local/bin/rt
+  ok "Laget /usr/local/bin/rt → $RT_LINK"
 fi
 
 # ───────────── configs: sjekk & evt. generer (as root, deretter chown) ─────────────
@@ -293,50 +293,6 @@ if ask_yn "Oppdatere sti til backup.py i backup_config.json?" n; then
 fi
 
 
-# ───────────── Dropbox wizard (as user) ─────────────
-import_env_lines(){
-  local f="$1"
-  [[ -f "$f" ]] || return 1
-  grep -E '^(DROPBOX_APP_KEY|DROPBOX_APP_SECRET|DROPBOX_REFRESH_TOKEN)=' "$f" || return 2
-  install -d -m 0755 -o "$USER_NAME" -g "$USER_NAME" "$ENV_DIR"
-  grep -E '^(DROPBOX_APP_KEY|DROPBOX_APP_SECRET|DROPBOX_REFRESH_TOKEN)=' "$f" > "$ENV_FILE"
-  chown "$USER_NAME":"$USER_NAME" "$ENV_FILE"
-  chmod 600 "$ENV_FILE"
-  ok "Importerte Dropbox-nøkler fra $f → $ENV_FILE"
-}
-
-if ask_yn "Kjøre Dropbox-wizard nå for å sette APP_KEY/SECRET/REFRESH_TOKEN?" n; then
-  if [[ -f "$TOOLS_DIR/r_tools/tools/backup_wizard.py" ]]; then
-    info "Starter backup_wizard… (følg instruksjonene)"
-    as_user "cd '$TOOLS_DIR' && '$VENV_DIR/bin/python' -m r_tools.tools.backup_wizard" || warn "Wizard returnerte ikke-null."
-  elif [[ -f "$TOOLS_DIR/extra/dropbox_get_refresh_token.py" ]]; then
-    info "Starter extra/dropbox_get_refresh_token.py…"
-    as_user "cd '$TOOLS_DIR' && '$VENV_DIR/bin/python' 'extra/dropbox_get_refresh_token.py'" || warn "Wizard returnerte ikke-null."
-  else
-    warn "Fant ikke wizard i repo."
-  fi
-
-  for CAND in "$TOOLS_DIR/.env" "$USER_HOME/.env" "$TOOLS_DIR/backup_app/.env"; do
-    if [[ -f "$CAND" ]] && grep -q 'DROPBOX_REFRESH_TOKEN=' "$CAND"; then
-      import_env_lines "$CAND" && break
-    fi
-  done
-
-  if [[ ! -f "$ENV_FILE" ]] && ask_yn "Vil du lime inn nøkler nå og lagre til $ENV_FILE?" y; then
-    read -r -p "DROPBOX_APP_KEY: " DBX_APP_KEY || true
-    read -r -p "DROPBOX_APP_SECRET: " DBX_APP_SECRET || true
-    install -d -m 0755 -o "$USER_NAME" -g "$USER_NAME" "$ENV_DIR"
-    {
-      echo "DROPBOX_APP_KEY=${DBX_APP_KEY:-}"
-      echo "DROPBOX_APP_SECRET=${DBX_APP_SECRET:-}"
-      echo "DROPBOX_REFRESH_TOKEN=${DBX_REFRESH:-}"
-    } > "$ENV_FILE"
-    chown "$USER_NAME":"$USER_NAME" "$ENV_FILE"
-    chmod 600 "$ENV_FILE"
-    ok "Lagret Dropbox-nøkler i $ENV_FILE"
-  fi
-fi
-
 # ───────────── Port ─────────────
 PORT="$(ask_in "Port for UI" "$PORT_DEFAULT")"
 
@@ -389,8 +345,8 @@ ${T_GREEN}✅ Ferdig!${T_RESET}
 • Kjører som:      $USER_NAME
 
 Nyttig:
-  - Sjekk status:     ${T_BOLD}systemctl status rtools${T_RESET}
-  - Live logger:      ${T_BOLD}journalctl -u rtools -f${T_RESET}
-  - URL:              ${T_BOLD}http://<din-ip>:$PORT${T_RESET}
-  - Aktiver CLI env:  åpne ny terminal (eller ${T_BOLD}source $USER_HOME/.bashrc${T_RESET})
-EOF
+  - Sjekk status:       ${T_BOLD}systemctl status rtools${T_RESET}
+  - Live logger:        ${T_BOLD}journalctl -u rtools -f${T_RESET}
+  - URL:                ${T_BOLD}http://<din-ip>:$PORT${T_RESET}
+  - Aktiver CLI env:    åpne ny terminal (eller ${T_BOLD}source $USER_HOME/.bashrc${T_RESET})
+  - Kjør Dropbox wizard:  ${T_BOLD}rt backup --wizard${T_RESET}

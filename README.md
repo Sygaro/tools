@@ -1,238 +1,293 @@
-# r_tools — små, fleksible dev‑verktøy for prosjekter (RPi m.m.)
+# r_tools
 
-**r_tools** samler flere CLI- og UI‑verktøy i én struktur: søk i kode, bygg "paste chunks", formattering/rydding, sletting av cache, GitHub raw‑lister og integrert **backup**. Alt kan kjøres fra terminal (`rt …`) eller via et lite web‑UI.
+Et lite verktøysett for søk, formatering, opprydding, “paste-out”, GitHub raw-lenker og backup—med både CLI (`rt`) og et lite web-UI (FastAPI + Uvicorn).
 
-> Støttet plattform: Linux/macOS (testet på Raspberry Pi 4/5).
+- CLI: `bin/rt`
+- Web UI: `rt serve` → åpner et UI på en port du velger
+- Konfig: `tools/configs/*.json` (kan deles mellom UI og CLI)
+- Støtte for Dropbox-opplasting i backup (med enkel env-sjekk/diagnose + wizard)
 
 ---
 
 ## Innhold
-- `rt search` – raske søk i prosjektfiler (regex, flere termer, AND/OR)
-- `rt paste` – generer innlimingsklare tekstfiler ("paste_001.txt" …)
-- `rt format` – kjør Prettier/Black/Ruff + valgfri whitespace‑opprydding
-- `rt clean` – trygg sletting av cache/temp (dry‑run som standard)
-- `rt gh-raw` – list rå‑URLer (GitHub API)
-- `rt backup` – integrasjon mot din eksisterende `backup_app/backup.py`
-- `rt serve` – enkel web‑UI for alle verktøy (prosjektvelger + oppskrifter)
+
+- [Forutsetninger](#forutsetninger)
+- [Rask installasjon (setup-script)](#rask-installasjon-setup-script)
+- [Manuell installasjon](#manuell-installasjon)
+- [Starte UI/CLI](#starte-uicli)
+- [Systemd-tjeneste](#systemd-tjeneste)
+- [Konfigfiler](#konfigfiler)
+- [Dropbox-oppsett](#dropbox-oppsett)
+- [Feilsøking](#feilsøking)
+- [Avinstallere](#avinstallere)
 
 ---
 
-## Installasjon
+## Forutsetninger
+
+- Linux (testet på Raspberry Pi OS/Debian)
+- `python3.11+`, `pip`, `venv`, `git`
+- Byggeverktøy anbefales: `build-essential` (på Debian/Ubuntu)
+
+Installer raskt på Debian-baserte systemer:
+
 ```bash
-# klon repo
+sudo apt update
+sudo apt install -y python3 python3-venv python3-pip git build-essential
+```
+
+---
+
+## Rask installasjon (setup-script)
+
+Repoet inkluderer et setup-script som setter opp alt for deg, og spør underveis:
+
+- lager virtuelt miljø og installerer avhengigheter
+- verifiserer/lagrer konfigfiler i `tools/configs`
+- sørger for at du kan kjøre `rt` fra hvor som helst ved å linke **din** `bin/rt` til `~/.local/bin/rt`
+- (valg) lager systemd-tjeneste (user/system)
+- (valg) kjører Dropbox-wizard for å skaffe refresh token
+- legger til miljøvariabler i `~/.bashrc` (bl.a. `RTOOLS_CONFIG_DIR`, `PATH`)
+
+Kjør:
+
+```bash
+git clone https://github.com/Sygaro/tools
+cd tools
+sudo ./scripts/setup_tools.sh
+```
+
+> Scriptet må kjøres med `sudo` slik at det trygt kan opprette system-tjenester. Det sørger samtidig for at filer/mapper eies av din bruker etterpå.
+
+Når scriptet er ferdig:
+- åpne en ny terminal (for at `PATH` og env skal ta effekt)
+- test: `which rt && rt --help`
+
+---
+
+## Manuell installasjon
+
+Hvis du heller vil gjøre det manuelt:
+
+```bash
 git clone https://github.com/Sygaro/tools
 cd tools
 
-# opprett venv og installer avhengigheter
 python3 -m venv venv
 source venv/bin/activate
+pip install --upgrade pip wheel
 pip install -r requirements.txt
-
-# legg rt på PATH (enkelt alias)
-# legg denne i ~/.bashrc eller ~/.zshrc
-alias rt="python -m r_tools.cli"
 ```
 
-> Alternativt kan du lage en liten wrapper i `/usr/local/bin/rt` som kjører `python -m r_tools.cli` i riktig venv.
+Gjør `rt` tilgjengelig i PATH uten å lage en ny binær—vi **bruker prosjektets `bin/rt`**:
 
----
-
-## Katalogstruktur (utdrag)
-```
-tools/
-├─ r_tools/
-│  ├─ cli.py
-│  ├─ config.py
-│  └─ tools/
-│     ├─ code_search.py   # search
-│     ├─ paste_chunks.py  # paste
-│     ├─ format_code.py   # format
-│     ├─ clean_temp.py    # clean
-│     ├─ gh_raw.py        # gh-raw
-│     └─ webui.py         # rt serve
-├─ backup_app/            # din eksisterende backup-app
-│  ├─ backup.py
-│  └─ ...
-└─ configs/
-   ├─ global_config.json
-   ├─ search_config.json
-   ├─ paste_config.json
-   ├─ format_config.json
-   ├─ clean_config.json
-   ├─ gh_raw_config.json
-   ├─ backup_config.json        # peker til backup_app/backup.py (valgfri)
-   └─ backup_profiles.json      # profiler + default for backup
+```bash
+mkdir -p ~/.local/bin
+ln -sf "$PWD/bin/rt" ~/.local/bin/rt
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+echo "export RTOOLS_CONFIG_DIR=\"$PWD/configs\"" >> ~/.bashrc
+# åpne en ny terminal etterpå
 ```
 
 ---
 
-## Konfigurasjon
-Alle verktøy leser først `configs/global_config.json` og deretter verktøyspesifikke filer. Prosjekt‑override kan gis i CLI/UI (project‑root).
+## Starte UI/CLI
 
-**Viktig:** JSON kan **ikke** ha kommentarer. Bruk relative stier der det er naturlig.
+- CLI:  
+  ```bash
+  rt --help
+  rt search "import\\s+os" --all
+  ```
 
-### Global eksempel (`configs/global_config.json`)
-```json
-{
-  "project_root": ".",
-  "include_extensions": [".py", ".sh", ".c", ".cpp", ".h", ".js", ".ts"],
-  "exclude_dirs": ["__pycache__", "build", ".git", "node_modules", "venv"],
-  "exclude_files": [],
-  "case_insensitive": true
-}
+- UI (lokalt):  
+  ```bash
+  rt serve --host 0.0.0.0 --port 8765
+  ```
+  Åpne i nettleser: `http://<pi-ip>:8765`
+
+I UI:
+- velg verktøy via tabs (Search, Paste, Format, Clean, GH Raw, Backup, Settings)
+- statuslamper viser busy/ok/feil
+- “Oppskrifter” (recipes) i toppmenyen gir hurtigkall for vanlige jobber
+- “Settings” lagrer globale innstillinger i `configs/global_config.json`
+- “Debug config” viser hvilke konfigfiler UI forventer og hvor de ligger
+
+---
+
+## Systemd-tjeneste
+
+Du kan kjøre UI som systemd-tjeneste. Setup-scriptet spør om dette; her er manuelle kommandoer om du trenger dem.
+
+### Bruker-tjeneste (anbefalt)
+Støtter instanser via `@PORT`. Den bruker repoets `bin/rt` direkte.
+
+```ini
+# ~/.config/systemd/user/rtools@.service
+[Unit]
+Description=r_tools UI (user) on port %i
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=%h/tools/bin/rt serve --host 0.0.0.0 --port %i
+WorkingDirectory=%h/tools
+Environment=RTOOLS_CONFIG_DIR=%h/tools/configs
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
 ```
 
-### Paste (`configs/paste_config.json`)
-```json
-{
-  "paste": {
-    "root": ".",
-    "out_dir": "paste_out",
-    "max_lines": 4000,
-    "allow_binary": false,
-    "include": ["**/*.py", "**/*.js", "**/*.ts", "**/*.css", "**/*.html", "**/*.json", "**/*.md", "**/*.sh"],
-    "exclude": ["**/.git/**", "**/venv/**", "**/node_modules/**", "**/__pycache__/**", "**/.pytest_cache/**", "**/.mypy_cache/**", "**/.DS_Store"],
-    "only_globs": [],
-    "skip_globs": [],
-    "filename_search": true
-  }
-}
+Aktiver:
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now rtools@8765.service
 ```
 
-### Format (`configs/format_config.json`)
-```json
-{
-  "format": {
-    "prettier": { "enable": true, "globs": ["static/**/*.{html,css,js}"] },
-    "black":    { "enable": true, "paths": ["app"] },
-    "ruff":     { "enable": true, "args": ["check", "app", "--fix"] },
-    "cleanup":  {
-      "enable": true,
-      "paths": ["app", "static"],
-      "exts": [".py", ".js", ".ts", ".css", ".html", ".json", ".sh"],
-      "trim_blanklines": true   
-    }
-  }
-}
+### System-tjeneste (hele systemet)
+
+```ini
+# /etc/systemd/system/rtools.service
+[Unit]
+Description=r_tools UI (system)
+After=network.target
+
+[Service]
+Type=simple
+User=<din-bruker>
+Group=<din-bruker>
+WorkingDirectory=/home/<din-bruker>/tools
+Environment=RTOOLS_CONFIG_DIR=/home/<din-bruker>/tools/configs
+ExecStart=/home/<din-bruker>/tools/bin/rt serve --host 0.0.0.0 --port 8765
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
 ```
 
-### Clean (`configs/clean_config.json`)
-```json
-{
-  "clean": {
-    "targets": {
-      "pycache": true, "pytest_cache": true, "mypy_cache": true, "ruff_cache": true,
-      "coverage": true, "build": true, "dist": true, "editor": true,
-      "ds_store": true, "thumbs_db": true, "node_modules": false
-    },
-    "extra_globs": [],
-    "skip_globs": []
-  }
-}
-```
-
-### Backup (`configs/backup_config.json` og `configs/backup_profiles.json`)
-```json
-// configs/backup_config.json
-{ "backup": { "script": "backup_app/backup.py" } }
-```
-```json
-// configs/backup_profiles.json
-{
-  "profiles": {
-    "countdown_zip": {"project": "countdown", "source": "countdown", "dest": "backups", "format": "zip", "keep": 10},
-    "countdown_tgz": {"project": "countdown", "source": "countdown", "dest": "backups", "format": "tar.gz", "keep": 10}
-  },
-  "default": "countdown_zip"
-}
+Aktiver:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now rtools.service
 ```
 
 ---
 
-## Bruk (CLI)
+## Konfigfiler
 
-### Search
-```bash
-rt search class --all --max-size 2000000
-rt search "import\\s+os, class" --all  # flere termer (AND)
-```
+Alle konfigfiler ligger i `tools/configs/` (kan overstyres med `RTOOLS_CONFIG_DIR`):
 
-### Paste
-```bash
-rt paste --list-only
-rt paste --out paste_out --max-lines 4000
-```
+- `projects_config.json` – liste over prosjekter i UI-dropdown
+- `recipes_config.json` – “Oppskrifter” på toppen (hurtigknapper)
+- `search_config.json` – default søketermer for `search`
+- `paste_config.json` – standardinnstillinger for “paste out”
+- `format_config.json` – hvilke formattere/cleanup som brukes
+- `clean_config.json` – hvilke rydde-mål (pycache, ruff_cache, …)
+- `gh_raw_config.json` – repo/branch/path-oppsett for GH Raw
+- `backup_config.json` – sti til `backup.py` + defaults
+- `backup_profiles.json` – navngitte backup-profiler + default
+- `global_config.json` – UI/CLI-globale innstillinger (f.eks. `default_project`, `default_tool`)
 
-### Format
-```bash
-rt format                # faktisk kjøring
-rt format --dry-run      # simuler
-```
+UI leser og **kan lagre**:
+- globale innstillinger via fanen **Settings** (oppdaterer `global_config.json`)
+- clean-targets via **Clean → Lagre targets** (oppdaterer `clean_config.json`)
+- backup-script sti via **Settings** (oppdaterer `backup_config.json`)
 
-### Clean (trygg som standard)
-```bash
-rt clean                 # dry-run
-rt clean --yes           # slett faktisk
-rt clean --what pycache ruff_cache --skip node_modules
-```
-
-### GitHub raw
-```bash
-rt gh-raw --json
-```
-
-### Backup
-```bash
-# bruker default-profil fra configs/backup_profiles.json
-rt backup --dry-run --list
-
-# eksplisitt profil
-rt backup --profile countdown_zip --dry-run
-
-# overstyr felter
-rt backup --profile countdown_zip --tag nightly --keep 20
-```
-
-### List effektiv config/meta
-```bash
-rt list                  # alt
-rt list --tool paste
-rt list --tool backup    # viser backup.py + profiler/default
-```
+> Endringer i disse filene gjelder også når du kjører CLI-kommandorer via `rt`.
 
 ---
 
-## Web‑UI
-Start:
-```bash
-rt serve --host 0.0.0.0 --port 8765
-```
-Funksjoner:
-- Prosjektvelger (fra `configs/projects_config.json`)
-- Oppskrifter (knapper) fra `configs/recipes_config.json`
-- Kort for hver funksjon (Search/Paste/Format/Clean/GH Raw/Backup)
-- **Clean** har trygg modus-bryter (Dry‑run ↔ Apply) med advarsel
-- **Backup** støtter profil‑dropdown (leses fra `configs/backup_profiles.json`)
+## Dropbox-oppsett
 
-> Favicon leveres av serveren (ingen 404). UI lagrer felt lokalt (per prosjekt).
+For opplasting i backup:
+
+1. **Wizard**  
+   Du kan kjøre veiviseren (anbefalt). Fra UI: `Backup → Env-sjekk` gir status, og wizard kan kjøres via CLI (eller via `extra/dropbox_get_refresh_token.py`).
+
+   Typisk:
+   ```bash
+   rt backup --wizard
+   ```
+   (eller kjør `python extra/dropbox_get_refresh_token.py` manuelt og følg instruksene)
+
+2. **Miljøvariabler**  
+   Verktøyene bruker:
+   ```
+   DROPBOX_APP_KEY
+   DROPBOX_APP_SECRET
+   DROPBOX_REFRESH_TOKEN
+   ```
+   Disse blir gjerne lagt i `~/.bashrc` av setup-scriptet eller wizard. Åpne ny terminal etterpå.
+
+3. **Diagnose**  
+   I UI: “Env-sjekk” (kaller `/api/diag/dropbox`) → viser om refresh funker og om token er gyldig.
 
 ---
 
 ## Feilsøking
-- **Prettier/Black/Ruff ikke funnet**: installer i samme venv eller globalt.
-- **JSON med kommentarer**: fjern `//`/`#` – JSON støtter ikke kommentarer.
-- **GH‑raw 404**: sjekk `gh_raw_config.json` (user/repo/branch) og nett.
-- **Backup**: verifiser `configs/backup_config.json` peker til riktig `backup.py`, og at `configs/backup_profiles.json` finnes.
+
+- **`rt` ikke funnet**  
+  Sørg for at `~/.local/bin` er på PATH, og at symlinken peker til prosjektets `bin/rt`:
+  ```bash
+  which rt
+  ls -l ~/.local/bin/rt
+  ```
+
+- **Konfig mangler / feil sti**  
+  I UI, åpne **Settings → diagnose** (viser `/api/debug-config`). Sjekk `RTOOLS_CONFIG_DIR`, og at alle forventede filer finnes. Du kan også sette:
+  ```bash
+  export RTOOLS_CONFIG_DIR="/home/<deg>/tools/configs"
+  ```
+
+- **Rart eierskap etter sudo-kjøring**  
+  Hvis du manuelt kjørte ting med `sudo`, kan noen filer eies av root. Korriger:
+  ```bash
+  sudo chown -R $USER:$USER ~/tools ~/.local/bin/rt
+  ```
+
+- **Systemd starter ikke**  
+  Sjekk logger:
+  ```bash
+  systemctl --user status rtools@8765.service
+  journalctl --user -u rtools@8765.service -f
+  ```
+
+- **Pip krasj / “No module named pip._internal...”**  
+  Oppgrader pip inne i venv med `python -m pip` (ikke `pip` fra PATH):
+  ```bash
+  source venv/bin/activate
+  python -m pip install --upgrade pip wheel setuptools
+  python -m pip install -r requirements.txt
+  ```
 
 ---
 
-## Lisens
-MIT
+## Avinstallere
+
+```bash
+# stopp user-tjeneste (hvis aktiv)
+systemctl --user disable --now rtools@8765.service 2>/dev/null || true
+
+# stopp system-tjeneste (hvis brukt)
+sudo systemctl disable --now rtools.service 2>/dev/null || true
+
+# fjern symlink
+rm -f ~/.local/bin/rt
+
+# (valgfritt) fjern repo
+rm -rf ~/tools
+```
 
 ---
 
-## Endringslogg (kort)
-- UI/CLI samkjørt for trygge standarder (clean = dry-run, backup = default‑profil)
-- Filnavn‑søk i paste, AND‑søk i search, UI‑oppskrifter
-- Backup‑integrasjon via wrapper (ingen endring i din `backup.py` nødvendig)
+## Tips
+
+- Du kan sette **standard prosjekt** og **standard verktøy** i **Settings** (lagres i `global_config.json`), så åpner UI på riktig sted automatisk.  
+- I **Backup** kan du velge profil fra `backup_profiles.json`.  
+- **Statuslamper**: grønn = ok, gult pulserende = kjører, rød = feil.  
+- **Prosjektvelgeren** i headeren styrer hvilket prosjekt alle verktøy opererer på (via `project_root`-override til `load_config`).
+
+---
+
+God hacking! 🚀
 
