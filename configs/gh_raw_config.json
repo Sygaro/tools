@@ -1,3 +1,8 @@
 {
-  "gh_raw": { "user": "Sygaro", "repo": "countdown", "branch": "main", "path_prefix": "" }
+  "gh_raw": {
+    "user": "Sygaro",
+    "repo": "tools",
+    "branch": "main",
+    "path_prefix": ""
+  }
 }

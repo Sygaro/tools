@@ -6,7 +6,7 @@
     "allow_binary": false,
     "filename_search": true,
     "include": ["r_tools/tools/webui.py"],
-    "exclude": ["**/.git/**","**/venv/**","**/node_modules/**","**/__pycache__/**","**/.pytest_cache/**","**/.mypy_cache/**","._.DS_Store",".DS_Store"],
+    "exclude": ["**/.git/**", "**/venv/**", "**/node_modules/**", "**/__pycache__/**", "**/.pytest_cache/**", "**/.mypy_cache/**", "._.DS_Store", ".DS_Store"],
     "only_globs": [],
     "skip_globs": []
   }
