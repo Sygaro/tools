@@ -1,7 +1,7 @@
 // tools/r_tools/webui_app/static/app.js
 const PREF_KEY = (proj) => `rtools:prefs:${proj}`;
 const ACTIVE_TOOL_KEY = 'rtools:active_tool';
-const TOOLS = ['search','replace','paste','format','clean','gh-raw','backup','git','settings'];
+const TOOLS = ['search','replace','paste','format','clean','gh-raw','backup','git','settings','help'];
 const STATUS_IDS = {
   search: 'status_search',
   replace: 'status_replace',

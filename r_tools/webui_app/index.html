@@ -29,6 +29,8 @@
         <button class="tab" data-tool="backup">Backup</button>
         <button class="tab" data-tool="git">Git</button>
         <button class="tab" data-tool="settings">Settings</button>
+        <button class="tab" data-tool="help">Help</button>
+
       </div>
       <!-- Oppskrifter -->
       <div class="recipes" id="recipes_box">
@@ -529,6 +531,94 @@
             <textarea id="out_git" class="output" rows="18" placeholder="Git-output vises her …" readonly></textarea>
           </div>
         </section>
+<!-- HELP (NY) -->
+<section class="card tool tool-help" data-tool="help">
+  <div class="tool-header">
+    <div class="tool-title">Hjelp & brukerveiledning</div>
+    <div class="tool-actions"></div>
+  </div>
+  <div class="tool-body" style="max-width: 1100px">
+    <p class="muted">Denne siden gir en kjapp oversikt over verktøyene i r_tools UI og anbefalte arbeidsflyter – spesielt for Git.</p>
+
+    <h3>Oversikt over verktøy</h3>
+    <ul>
+      <li><b>Search</b> – raskt kodesøk (regex, include/exclude, filnavn-søk, osv.).</li>
+      <li><b>Replace</b> – trygge batch-erstatninger med dry-run og diff.</li>
+      <li><b>Paste</b> – generer “paste_*.txt” med utsnitt (for deling/AI/PR-notes).</li>
+      <li><b>Format</b> – Prettier, Black, Ruff og Cleanup – samlet kjøring eller forhåndsvis diff for én fil.</li>
+      <li><b>Clean</b> – slett cache/artefakter (dry-run som standard, <i>Apply</i> sletter).</li>
+      <li><b>GH Raw</b> – bygg GitHub “raw”-URLer for en sti (praktisk til deling).</li>
+      <li><b>Backup</b> – integrert kjøring av backup-script/profiler.</li>
+      <li><b>Git</b> – daglige git-oppgaver (status, sync, branch-håndtering, merge, push, diff, logg, ACP).</li>
+      <li><b>Settings</b> – globale default-valg og JSON-editor for configs.</li>
+    </ul>
+
+    <hr>
+
+    <h3>Git – knapper og hva de gjør</h3>
+    <div class="grid two">
+      <div>
+        <p><b>Status</b> – <code>git status -sb</code>. Viser kort status med branch, sporings-remote og pending endringer.</p>
+        <p><b>Sync</b> – <code>git fetch &amp;&amp; git pull --ff-only &lt;remote&gt; &lt;branch&gt;</code>. Henter og fast-forwarder til siste. Stopper hvis merge kreves.</p>
+        <p><b>Diff</b> – viser unified diff uten farger. Hak av “<i>Diff (staged)</i>” for å se indekserte endringer (<code>--cached</code>).</p>
+        <p><b>Log</b> – kort logg (<code>--oneline --graph --decorate</code>) for siste <i>N</i> commits.</p>
+      </div>
+      <div>
+        <p><b>Switch</b> – <code>git switch &lt;branch&gt;</code>. Bytter til valgt branch.</p>
+        <p><b>Create</b> – <code>git switch -c &lt;ny&gt; [&lt;base&gt;]</code>. Oppretter og bytter til ny branch fra base (standard <code>main</code>).</p>
+        <p><b>Push</b> – <code>git push &lt;remote&gt; &lt;branch&gt;</code>. Krever avkrysset <i>Bekreft beskyttet branch</i> for beskyttede branched.</p>
+        <p><b>Merge → main</b> – bytter til <code>main</code> og kjører <code>git merge --ff-only &lt;kilde&gt;</code>. Krever ren arbeidskatalog og bekreftelse (beskyttet).</p>
+        <p><b>ACP</b> – “add-commit-push”: <code>git add -A</code> → <code>git commit -m "melding"</code> → <code>git push</code> → <code>git status</code>. Krever melding.</p>
+      </div>
+    </div>
+
+    <hr>
+
+    <h3>Anbefalt daglig flyt</h3>
+    <ol>
+      <li><b>Velg riktig prosjekt</b> i topp-høyre dropdown.</li>
+      <li><b>Sync</b> på <code>main</code> (eller aktuell base): <i>Status</i> → <i>Sync</i>. Løs evt. konflikter lokalt først.</li>
+      <li><b>Opprett feature-branch</b>: fyll inn “Ny branch” (f.eks. <code>feature/min-endring</code>) og base (typisk <code>main</code>) → <i>Create</i>.</li>
+      <li><b>Kod</b>, se <i>Diff</i>, kjør formattering ved behov.</li>
+      <li><b>ACP</b> med beskrivende melding (små, hyppige commits er bra).</li>
+      <li><b>Push</b> feature-branchen til remote.</li>
+    </ol>
+
+    <hr>
+
+    <h3>Trygg flyt for <em>Merge → main</em></h3>
+    <ol>
+      <li><b>Sørg for ren arbeidskatalog:</b> <i>Status</i> skal vise “working tree clean”. Kjør evt. <i>ACP</i> eller stash.</li>
+      <li><b>Oppdater begge grener:</b>
+        <ul>
+          <li>Bytt til <code>main</code> → <i>Sync</i>.</li>
+          <li>Bytt tilbake til feature-branch → <i>Sync</i> (rebase/ff på egen branch).</li>
+        </ul>
+      </li>
+      <li><b>Velg kilden (feature-branchen)</b> i branch-dropdown.</li>
+      <li><b>Kryss av “Bekreft beskyttet branch”.</b> (main er beskyttet).</li>
+      <li>Klikk <b>Merge → main</b>. Verktøyet:
+        <ul>
+          <li>bytter til <code>main</code>,</li>
+          <li>kjører <code>git merge --ff-only &lt;feature&gt;</code> (ingen merge-commit; stopper hvis FF ikke er mulig),</li>
+          <li>viser resultat i loggfeltet.</li>
+        </ul>
+      </li>
+      <li><b>Push</b> <code>main</code> til remote (husk bekreftelse for beskyttet branch).</li>
+    </ol>
+    <p class="muted">NB: <i>--ff-only</i> gjør prosessen ren. Dersom FF ikke er mulig, oppdater feature-branchen (rebase/merge main inn i feature) til FF blir mulig – eller gjør merge via PR.</p>
+
+    <hr>
+
+    <h3>Feilsøking</h3>
+    <ul>
+      <li><b>Tom diff:</b> ingen endringer eller du ser på feil type (prøv å (av)krysse “Diff (staged)”).</li>
+      <li><b>Push/merge blokkert:</b> mangler avkrysset “Bekreft beskyttet branch” for <code>main</code>.</li>
+      <li><b>Merge feiler:</b> fordi <i>--ff-only</i>. Kjør <i>Sync</i> på både <code>main</code> og feature → rebase feature på main → prøv igjen.</li>
+      <li><b>Ny branch synes ikke i listen:</b> listen oppdateres automatisk etter <i>Create</i>/<i>Switch</i>, men hvis du har flere åpne faner, trykk <i>Oppdater</i> i headeren.</li>
+    </ul>
+  </div>
+</section>
 
         <!-- SETTINGS -->
         <section class="card tool tool-settings" data-tool="settings">
