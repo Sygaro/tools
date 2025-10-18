@@ -27,10 +27,9 @@ from .paste_chunks import run_paste
 from .replace_code import run_replace
 
 # Kataloger
-TOOLS_ROOT = Path(__file__).resolve().parents[2]  # .../tools
+TOOLS_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_DIR = Path(os.environ.get("RTOOLS_CONFIG_DIR", str(TOOLS_ROOT / "configs"))).resolve()
-# --- webui-app (statiske filer) ---
-WEBUI_DIR = TOOLS_ROOT / "r_tools" / "webui_app"  # /home/<USER>/tools/r_tools/webui_app
+WEBUI_DIR = TOOLS_ROOT / "r_tools" / "webui_app"
 
 def _read_text_safe(path: Path) -> str:
     try:
@@ -39,7 +38,6 @@ def _read_text_safe(path: Path) -> str:
         return ""
 
 def _external_index_html() -> str | None:
-    """Returner ekstern index.html hvis den finnes, ellers None."""
     idx = WEBUI_DIR / "index.html"
     if idx.is_file():
         return _read_text_safe(idx)
@@ -68,16 +66,9 @@ def _load_projects() -> list[ProjectEntry]:
         if not isinstance(p, dict) or "name" not in p or "path" not in p:
             raise ValueError(f"{cfg_path}: item[{i}] mangler 'name' eller 'path'")
         raw_path = str(p["path"])
-        base = TOOLS_ROOT  # relativ tolkes fra /tools
+        base = TOOLS_ROOT
         abs_path = (Path(raw_path).expanduser() if Path(raw_path).is_absolute() else (base / raw_path)).resolve()
-        out.append(
-            ProjectEntry(
-                name=str(p["name"]),
-                path=raw_path,
-                abs_path=str(abs_path),
-                exists=abs_path.exists(),
-            )
-        )
+        out.append(ProjectEntry(name=str(p["name"]), path=raw_path, abs_path=str(abs_path), exists=abs_path.exists()))
     if not out:
         raise ValueError(f"{cfg_path}: 'projects' er tom")
     return out
@@ -90,20 +81,12 @@ def _load_recipes() -> list[dict[str, Any]]:
     return list(data.get("recipes", []))
 
 def _capture(fn, *args, **kwargs) -> str:
-    """Fang stdout fra run_* verktøy for UI-visning."""
     buf = io.StringIO()
     with redirect_stdout(buf):
         fn(*args, **kwargs)
     return buf.getvalue()
 
 def _safe_clean_paste_out(out_dir: Path) -> None:
-    """
-    Slett bare tidligere genererte paste-filer i out_dir.
-    Kriterier:
-      - Katalogen må finnes (ellers ingen sletting)
-      - Sletter kun filer som matcher 'paste_*.txt'
-    Oppretter katalogen hvis den ikke finnes (for forutsigbarhet).
-    """
     try:
         out_dir.mkdir(parents=True, exist_ok=True)
         for p in out_dir.glob("paste_*.txt"):
@@ -113,25 +96,20 @@ def _safe_clean_paste_out(out_dir: Path) -> None:
             except Exception:
                 pass
     except Exception:
-        # stilletiende – dette er "best effort", ikke kritisk
         pass
 
 app = FastAPI(title="r_tools UI", default_response_class=JSONResponse)
-# --- ytelse: GZip ---
-app.add_middleware(GZipMiddleware, minimum_size=600)  # komprimer kun "ekte" payloads
-# --- serve /static hvis katalog finnes ---
+app.add_middleware(GZipMiddleware, minimum_size=600)
+
 if (WEBUI_DIR / "static").is_dir():
     app.mount("/static", StaticFiles(directory=str(WEBUI_DIR / "static")), name="static")
 
-# --- enkel cache for /static ---
 @app.middleware("http")
 async def add_static_cache_headers(request: Request, call_next):
     response = await call_next(request)
     try:
         if request.url.path.startswith("/static/"):
-            # Lang cache for statiske assets (kan tilpasses)
             response.headers.setdefault("Cache-Control", "public, max-age=31536000, immutable")
-        # Ellers ingen endring
     except Exception:
         pass
     return response
@@ -143,10 +121,6 @@ class RunPayload(BaseModel):
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    """
-    Serverer KUN ekstern index.html fra r_tools/webui_app/.
-    Hvis filen mangler: gi tydelig feilmelding.
-    """
     external = _external_index_html()
     if not external:
         raise HTTPException(
@@ -197,6 +171,30 @@ def api_clean_targets_set(project: str | None = Query(None), body: dict[str, Any
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return {"ok": True, "message": f"Lagret targets til {path}"}
 
+# -------- Git hjelpe-endepunkt (remotes/branches) --------
+@app.get("/api/git/branches")
+def api_git_branches(project: str | None = Query(None)):
+    from .git_tools import list_branches as _list_br
+    cfg = load_config("git_config.json", Path(project).resolve() if project else None, None)
+    root = Path(cfg.get("project_root", ".")).resolve()
+    try:
+        arr = _list_br(root)
+        # legg gjerne på current senere om ønskelig
+        return {"branches": arr}
+    except Exception as e:
+        return {"error": f"{type(e).__name__}: {e}", "branches": []}
+
+@app.get("/api/git/remotes")
+def api_git_remotes(project: str | None = Query(None)):
+    from .git_tools import list_remotes as _list_rm
+    cfg = load_config("git_config.json", Path(project).resolve() if project else None, None)
+    root = Path(cfg.get("project_root", ".")).resolve()
+    try:
+        arr = _list_rm(root)
+        return {"remotes": arr}
+    except Exception as e:
+        return {"error": f"{type(e).__name__}: {e}", "remotes": []}
+
 @app.post("/api/run")
 def api_run(body: RunPayload):
     tool = body.tool
@@ -211,6 +209,7 @@ def api_run(body: RunPayload):
         "gh-raw": "gh_raw_config.json",
         "format": "format_config.json",
         "clean": "clean_config.json",
+        "git": "git_config.json",
     }.get(tool, None)
 
     ov: dict[str, Any] = {}
@@ -219,10 +218,8 @@ def api_run(body: RunPayload):
 
     try:
         if tool == "search":
-            # config-overrides (f.eks. case-insensitive)
             if "case_sensitive" in args:
                 ov["case_insensitive"] = not bool(args.get("case_sensitive"))
-
             cfg = load_config(tool_cfg, project_path, ov or None)
             out = _capture(
                 run_search,
@@ -242,50 +239,37 @@ def api_run(body: RunPayload):
             )
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
+
         elif tool == "paste":
             pov: dict[str, Any] = {"paste": {}}
-            # Ta kun med overrides som faktisk er gitt fra UI
             for key in ["out_dir", "max_lines", "include", "exclude", "filename_search"]:
                 if key in args and args[key] not in (None, ""):
-                    # NB: include/exclude må være fraværende (ikke []/""), ellers overstyrer de config.
                     if key in ("include", "exclude") and args[key] == []:
                         continue
                     pov["paste"][key] = args[key]
-
             cfg = load_config(tool_cfg, project_path, pov if pov["paste"] else None)
-
-            # Pre-clean av out_dir (kun når vi faktisk genererer filer)
             list_only = bool(args.get("list_only", False))
             if not list_only:
                 project_root = Path(cfg.get("project_root", ".")).resolve()
                 eff_out = Path(cfg.get("paste", {}).get("out_dir", "paste_out"))
                 out_path = (eff_out if eff_out.is_absolute() else (project_root / eff_out)).resolve()
                 _safe_clean_paste_out(out_path)
-
             out = _capture(run_paste, cfg=cfg, list_only=list_only)
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
+
         elif tool == "format":
             cfg = load_config(tool_cfg, project_path, ov or None)
-
-            # Eventuelle UI-overstyringer (payload.args.override = {"format": {...}})
             override = args.get("override") or None
             if isinstance(override, dict):
                 cfg = deep_merge(cfg, override)
-
-            out = _capture(
-                run_format,
-                cfg=cfg,
-                dry_run=bool(args.get("dry_run", False)),
-            )
+            out = _capture(run_format, cfg=cfg, dry_run=bool(args.get("dry_run", False)))
             dt = int((time.time() - t0) * 1000)
-
-            # enkel heuristikk for rc
             rc = 0
             if "Traceback (most recent call last)" in out or "[error]" in out:
                 rc = 2
-
             return {"output": out, "summary": {"rc": rc, "duration_ms": dt}}
+
         elif tool == "clean":
             cov: dict[str, Any] = {"clean": {}}
             if "targets" in args and isinstance(args["targets"], dict):
@@ -294,25 +278,19 @@ def api_run(body: RunPayload):
                 cov["clean"]["extra_globs"] = args["extra_globs"]
             if "skip_globs" in args:
                 cov["clean"]["skip_globs"] = args["skip_globs"]
-
             cfg = load_config("clean_config.json", project_path, cov if cov["clean"] else None)
             mode = (args.get("mode") or "dry").lower()
             perform = mode == "apply"
             dry_run = not perform
-
-            out = _capture(
-                run_clean,
-                cfg=cfg,
-                only=args.get("what") or None,
-                skip=args.get("skip") or [],
-                dry_run=dry_run,
-            )
+            out = _capture(run_clean, cfg=cfg, only=args.get("what") or None, skip=args.get("skip") or [], dry_run=dry_run)
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
+
         elif tool == "backup":
             rc, text = run_backup(args or {})
             dt = int((time.time() - t0) * 1000)
             return {"output": text, "rc": rc, "summary": {"rc": rc, "duration_ms": dt}}
+
         elif tool == "gh-raw":
             gov = {"gh_raw": {}}
             if "path_prefix" in args:
@@ -321,15 +299,13 @@ def api_run(body: RunPayload):
             out = _capture(run_gh_raw, cfg=cfg, as_json=False)
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
+
         elif tool == "replace":
             rov: dict[str, Any] = {"replace": {}}
-            # send overrides fra UI til config (valgfritt)
             for k_src, k_dst in [("include", "include"), ("exclude", "exclude"), ("max_size", "max_size")]:
                 if k_src in args and args[k_src] not in (None, "", []):
                     rov["replace"][k_dst] = args[k_src]
-
             cfg = load_config(tool_cfg, project_path, rov if rov["replace"] else None)
-
             out = _capture(
                 run_replace,
                 cfg=cfg,
@@ -347,8 +323,18 @@ def api_run(body: RunPayload):
             )
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
+
+        elif tool == "git":
+            # Viktig: send ov (project_root) videre slik at run_git jobber i korrekt repo
+            from .git_tools import run_git
+            cfg = load_config(tool_cfg, project_path, ov or None)
+            out = run_git(cfg, args.get("action", "status"), args)
+            dt = int((time.time() - t0) * 1000)
+            return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
+
         else:
             raise HTTPException(status_code=400, detail=f"Ukjent tool: {tool}")
+
     except Exception as e:
         dt = int((time.time() - t0) * 1000)
         return {"error": f"{type(e).__name__}: {e}", "summary": {"rc": 1, "duration_ms": dt}}
@@ -365,16 +351,12 @@ def api_format_preview(body: PreviewPayload):
         raise HTTPException(status_code=400, detail="path er påkrevd")
     cfg = load_config("format_config.json", project_path, None)
     project_root = Path(cfg.get("project_root", ".")).resolve()
-
-    # Sikkerhet: fil må ligge under project_root
     abs_path = (project_root / rel).resolve()
     try:
         abs_path.relative_to(project_root)
     except Exception:
         raise HTTPException(status_code=400, detail="path må være relativ til project_root")
-
     from .format_code import format_preview
-
     try:
         text = format_preview(cfg, rel_path=rel)
         return {"output": text}
@@ -399,13 +381,7 @@ def api_backup_profiles():
             "names": info.get("profiles_names") or [],
         }
     except Exception as e:
-        return {
-            "error": f"{type(e).__name__}: {e}",
-            "path": None,
-            "exists": False,
-            "default": None,
-            "names": [],
-        }
+        return {"error": f"{type(e).__name__}: {e}", "path": None, "exists": False, "default": None, "names": []}
 
 @app.get("/api/diag/dropbox")
 def api_diag_dropbox():
@@ -427,6 +403,7 @@ def api_debug_config():
         ("global_config.json", cfg_dir / "global_config.json"),
         ("backup_config.json", cfg_dir / "backup_config.json"),
         ("backup_profiles.json", cfg_dir / "backup_profiles.json"),
+        ("git_config.json", cfg_dir / "git_config.json"),
     ]
     return {
         "tools_root": str(tools_root),
@@ -435,6 +412,69 @@ def api_debug_config():
         "files": [{"name": n, "path": str(p), "exists": p.exists()} for n, p in files],
     }
 
+CONFIG_WHITELIST = [
+    "global_config.json",
+    "projects_config.json",
+    "recipes_config.json",
+    "search_config.json",
+    "paste_config.json",
+    "format_config.json",
+    "clean_config.json",
+    "gh_raw_config.json",
+    "backup_config.json",
+    "backup_profiles.json",
+    "git_config.json",
+]
+
+def _safe_cfg_path(name: str) -> Path:
+    if name not in CONFIG_WHITELIST:
+        raise HTTPException(status_code=400, detail=f"Ugyldig config-navn: {name}")
+    p = (CONFIG_DIR / name).resolve()
+    if p.parent != CONFIG_DIR.resolve():
+        raise HTTPException(status_code=400, detail="Forsøk på å nå utenfor CONFIG_DIR")
+    return p
+
+@app.get("/api/config-files")
+def api_config_files():
+    items = []
+    for n in CONFIG_WHITELIST:
+        p = _safe_cfg_path(n)
+        items.append({"name": n, "path": str(p), "exists": p.exists()})
+    return {"config_dir": str(CONFIG_DIR), "files": items}
+
+@app.get("/api/config")
+def api_config_get(name: str = Query(..., description="Filnavn i whitelist")):
+    p = _safe_cfg_path(name)
+    if not p.exists():
+        return {"name": name, "path": str(p), "exists": False, "content": "", "json": None}
+    txt = p.read_text(encoding="utf-8")
+    try:
+        parsed = json.loads(txt)
+    except Exception as e:
+        return {"name": name, "path": str(p), "exists": True, "content": txt, "json_error": str(e)}
+    return {"name": name, "path": str(p), "exists": True, "content": json.dumps(parsed, indent=2, ensure_ascii=False) + "\n"}
+
+@app.post("/api/config")
+def api_config_put(name: str = Query(..., description="Filnavn i whitelist"), body: dict[str, Any] = Body(...)):
+    p = _safe_cfg_path(name)
+    content = body.get("content", "")
+    if not isinstance(content, str):
+        raise HTTPException(status_code=400, detail="content må være streng")
+    try:
+        parsed = json.loads(content)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Ugyldig JSON: {e}")
+    p.write_text(json.dumps(parsed, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return {"ok": True, "name": name, "path": str(p)}
+
+@app.get("/favicon.ico")
+def favicon():
+    png_1x1 = (
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+        b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\x0bIDATx\x9cc``\x00"
+        b"\x00\x00\x02\x00\x01\xe2!\xbc3\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+    return Response(content=png_1x1, media_type="image/png")
 # Trygge UI-innstillinger (globale)
 @app.get("/api/settings")
 def api_settings():
@@ -475,6 +515,7 @@ def api_settings_save(body: dict[str, Any]):
     g["default_project"] = body.get("default_project") or None
     g["default_tool"] = body.get("default_tool") or None
     global_path.write_text(json.dumps(g, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
     # backup_config.json (kun script)
     backup_path = cfg_dir / "backup_config.json"
     try:
@@ -487,91 +528,5 @@ def api_settings_save(body: dict[str, Any]):
     else:
         b_all["backup"]["script"] = body.get("backup_script")
     backup_path.write_text(json.dumps(b_all, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
     return {"ok": True}
-
-# ---------- Sikker config-IO for JSON-editor i Settings ----------
-CONFIG_WHITELIST = [
-    "global_config.json",
-    "projects_config.json",
-    "recipes_config.json",
-    "search_config.json",
-    "paste_config.json",
-    "format_config.json",
-    "clean_config.json",
-    "gh_raw_config.json",
-    "backup_config.json",
-    "backup_profiles.json",
-]
-
-def _safe_cfg_path(name: str) -> Path:
-    if name not in CONFIG_WHITELIST:
-        raise HTTPException(status_code=400, detail=f"Ugyldig config-navn: {name}")
-    p = (CONFIG_DIR / name).resolve()
-    if p.parent != CONFIG_DIR.resolve():
-        raise HTTPException(status_code=400, detail="Forsøk på å nå utenfor CONFIG_DIR")
-    return p
-
-@app.get("/api/config-files")
-def api_config_files():
-    items = []
-    for n in CONFIG_WHITELIST:
-        p = _safe_cfg_path(n)
-        items.append({"name": n, "path": str(p), "exists": p.exists()})
-    return {"config_dir": str(CONFIG_DIR), "files": items}
-
-@app.get("/api/config")
-def api_config_get(name: str = Query(..., description="Filnavn i whitelist")):
-    p = _safe_cfg_path(name)
-    if not p.exists():
-        return {
-            "name": name,
-            "path": str(p),
-            "exists": False,
-            "content": "",
-            "json": None,
-        }
-    txt = p.read_text(encoding="utf-8")
-    try:
-        parsed = json.loads(txt)
-    except Exception as e:
-        # Returner rå-innhold + feil dersom filen er korrupt
-        return {
-            "name": name,
-            "path": str(p),
-            "exists": True,
-            "content": txt,
-            "json_error": str(e),
-        }
-    return {
-        "name": name,
-        "path": str(p),
-        "exists": True,
-        "content": json.dumps(parsed, indent=2, ensure_ascii=False) + "\n",
-    }
-
-@app.post("/api/config")
-def api_config_put(
-    name: str = Query(..., description="Filnavn i whitelist"),
-    body: dict[str, Any] = Body(...),
-):
-    # forventer {"content": "..."} med JSON-tekst
-    p = _safe_cfg_path(name)
-    content = body.get("content", "")
-    if not isinstance(content, str):
-        raise HTTPException(status_code=400, detail="content må være streng")
-    try:
-        parsed = json.loads(content)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Ugyldig JSON: {e}")
-    p.write_text(json.dumps(parsed, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    return {"ok": True, "name": name, "path": str(p)}
-
-# Favicon – unngå 404-støy
-@app.get("/favicon.ico")
-def favicon():
-    png_1x1 = (
-        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
-        b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\x0bIDATx\x9cc``\x00"
-        b"\x00\x00\x02\x00\x01\xe2!\xbc3\x00\x00\x00\x00IEND\xaeB`\x82"
-    )
-    return Response(content=png_1x1, media_type="image/png")

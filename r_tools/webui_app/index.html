@@ -16,6 +16,7 @@
       <div class="inline" style="gap: 6px"><span class="muted">Init</span><span class="lamp" id="status_init"></span></div>
       <div class="inline" style="gap: 6px">
         <span class="muted">Verktøy</span><span class="lamp" id="status_global"></span>
+        <div class="lamp" id="status_git" title="Git-status"></div>
         <span id="status_label" class="muted">(ingen)</span>
       </div>
       <!-- Tabs -->
@@ -27,6 +28,7 @@
         <button class="tab" data-tool="clean">Clean</button>
         <button class="tab" data-tool="gh-raw">GH&nbsp;Raw</button>
         <button class="tab" data-tool="backup">Backup</button>
+        <button class="tab" data-tool="git">Git</button>
         <button class="tab" data-tool="settings">Settings</button>
       </div>
       <!-- Oppskrifter -->
@@ -83,6 +85,7 @@
             <p class="muted">Tomt felt → bruker ev. <code>search_terms</code> fra config.</p>
           </div>
         </section>
+
         <!-- REPLACE -->
         <section class="card tool tool-replace" data-tool="replace">
           <div class="tool-header">
@@ -114,6 +117,7 @@
             <div id="sum_replace" class="summary"></div>
           </div>
         </section>
+
         <!-- PASTE -->
         <section class="card tool tool-paste" data-tool="paste">
           <div class="tool-header">
@@ -137,6 +141,7 @@
             <textarea id="out_paste" readonly></textarea>
           </div>
         </section>
+
         <!-- FORMAT -->
         <section class="card tool tool-format" data-tool="format">
           <div class="tool-header">
@@ -399,6 +404,7 @@
             <textarea id="out_gh" readonly></textarea>
           </div>
         </section>
+
         <!-- BACKUP -->
         <section class="card tool tool-backup" data-tool="backup">
           <div class="tool-header">
@@ -461,6 +467,70 @@
             </p>
           </div>
         </section>
+
+        <!-- GIT (NY) -->
+        <section class="card tool tool-git" data-tool="git">
+          <div class="tool-header">
+            <div class="tool-title">Git <span class="lamp" id="status_git"></span></div>
+            <div class="tool-actions">
+              <button class="btn" id="git_status" title="git status -sb">Status</button>
+              <button class="btn" id="git_sync" title="fetch + pull --ff-only">Sync</button>
+              <button class="btn" id="git_diff" title="Vis diff">Diff</button>
+              <button class="btn" id="git_log" title="Kort logg">Log</button>
+            </div>
+          </div>
+          <div class="tool-body">
+            <div class="grid two">
+              <label>Remote
+                <select id="git_remote"></select>
+              </label>
+              <label>Branch
+                <select id="git_branch"></select>
+              </label>
+            </div>
+
+            <div class="inline" style="margin-top:8px">
+              <button class="btn" id="git_switch" title="Bytt til valgt branch">Switch</button>
+              <button class="btn" id="git_push" title="Push valgt branch">Push</button>
+              <button class="btn" id="git_merge_main" title="Merge valgt branch → main (ff-only)">Merge → main</button>
+              <label class="inline" title="Må krysses av for å pushe/merge til beskyttede branched (f.eks. main).">
+                <input type="checkbox" id="git_confirm" />
+                Bekreft beskyttet branch
+              </label>
+            </div>
+
+            <div class="grid two" style="margin-top:12px">
+              <label>Ny branch
+                <input id="git_newbranch" type="text" placeholder="feature/my-branch" />
+              </label>
+              <label>Base
+                <input id="git_base" type="text" placeholder="main" />
+              </label>
+              <button class="btn" id="git_create" title="Opprett og bytt til ny branch">Create</button>
+            </div>
+
+            <div class="grid two" style="margin-top:12px">
+              <label class="grow">Commit-melding
+                <input id="git_message" type="text" placeholder="Kort, beskrivende commit-melding" />
+              </label>
+              <button class="btn" id="git_acp" title="git add -A; commit; push; status">ACP</button>
+            </div>
+
+            <div class="inline" style="margin-top:8px">
+              <label class="inline" title="Hvis krysset av, vises diff for indekserte (staged) filer.">
+                <input type="checkbox" id="git_staged" />
+                Diff (staged)
+              </label>
+              <label style="margin-left:16px">Logg: siste
+                <input id="git_log_n" type="number" min="1" value="10" style="width:6rem" />
+                commits
+              </label>
+            </div>
+
+            <textarea id="out_git" class="output" rows="18" placeholder="Git-output vises her …" readonly></textarea>
+          </div>
+        </section>
+
         <!-- SETTINGS -->
         <section class="card tool tool-settings" data-tool="settings">
           <div class="tool-header">

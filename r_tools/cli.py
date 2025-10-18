@@ -186,6 +186,21 @@ def build_parser() -> argparse.ArgumentParser:
     dg = sub.add_parser("diag", help="Diagnoseverktøy")
     dg_sub = dg.add_subparsers(dest="diag_cmd", required=True)
     dg_sub.add_parser("dropbox", help="Sjekk .env + Dropbox OAuth refresh")
+    # ---- git ----
+    gp = sub.add_parser("git", help="Git-kommandoer (status, push, switch, create, merge, acp, fetch, pull, sync, diff, log)")
+    gp.add_argument("action", choices=["status","branches","remotes","fetch","pull","push","switch","create","merge","acp","diff","log","sync"])
+    gp.add_argument("--project", type=Path, help="Overstyr project_root")
+    gp.add_argument("--remote")
+    gp.add_argument("--branch")
+    gp.add_argument("--base")
+    gp.add_argument("--message")
+    gp.add_argument("--source")
+    gp.add_argument("--target")
+    gp.add_argument("--ff-only", action="store_true")
+    gp.add_argument("--staged", action="store_true")
+    gp.add_argument("--n", type=int, default=10)
+    gp.add_argument("--confirm", action="store_true", help="Bekreft handling på beskyttet branch")
+
     # ---- list ----
     lp = sub.add_parser("list", help="Vis effektiv config / meta-info")
     lp.add_argument(
@@ -455,6 +470,28 @@ def main() -> None:
                     rc = proc.wait()
             print(f"[serve] Stoppet (exit {rc})")
             sys.exit(0)
+    if args.cmd == "git":
+        from .tools.git_tools import run_git
+        ov = {}
+        if getattr(args, "project", None):
+            ov["project_root"] = str(args.project)
+        cfg = load_config("git_config.json", getattr(args, "project", None), ov or None)
+        parms = {
+            "remote": args.remote,
+            "branch": args.branch,
+            "base": args.base,
+            "message": args.message,
+            "source": args.source,
+            "target": args.target,
+            "ff_only": bool(args.ff_only),
+            "staged": bool(args.staged),
+            "n": int(args.n),
+            "confirm": bool(args.confirm),
+        }
+        out = run_git(cfg, args.action, parms)
+        print(out, end="" if out.endswith("\n") else "\n")
+        return
+
     if args.cmd == "list":
         # Egen: backup meta + profiler
         if args.tool == "backup":

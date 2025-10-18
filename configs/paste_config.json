@@ -5,7 +5,7 @@
     "max_lines": 4000,
     "allow_binary": false,
     "filename_search": true,
-    "include": ["r_tools/tools/webui.py"],
+    "include": ["r_tools/tools/webui.py","r_tools/tools/git_tools.py","r_tools/webui_app/static/app.js"],
     "exclude": [".editorconfig", ".gitattributes", ".gitignore", ".pastechunksrc", ".prettierrc", ".vscode/settings.json", "README_DEV.md"],
     "only_globs": [],
     "skip_globs": []

@@ -1,7 +1,7 @@
 // tools/r_tools/webui_app/static/app.js
 const PREF_KEY = (proj) => `rtools:prefs:${proj}`;
 const ACTIVE_TOOL_KEY = 'rtools:active_tool';
-const TOOLS = ['search', 'replace', 'paste', 'format', 'clean', 'gh-raw', 'backup', 'settings'];
+const TOOLS = ['search','replace','paste','format','clean','gh-raw','backup','git','settings'];
 const STATUS_IDS = {
   search: 'status_search',
   replace: 'status_replace',
@@ -10,6 +10,7 @@ const STATUS_IDS = {
   clean: 'status_clean',
   'gh-raw': 'status_gh',
   backup: 'status_backup',
+  git: 'status_git',
 };
 function setLamp(id, state) {
   const el = document.getElementById(id);
@@ -63,6 +64,39 @@ async function withStatus(key, outId, fn) {
     throw e;
   }
 }
+async function fetchGitRemotes() {
+  const proj = currentProject();
+  const r = await fetch('/api/git/remotes?project=' + encodeURIComponent(proj));
+  const d = await r.json();
+  const sel = document.getElementById('git_remote');
+  sel.innerHTML = '';
+  (d.remotes || []).forEach((name) => {
+    const o = document.createElement('option');
+    o.value = name;
+    o.textContent = name;
+    sel.appendChild(o);
+  });
+  if (!sel.value && sel.options.length) sel.value = sel.options[0].value;
+}
+
+async function fetchGitBranches() {
+  const proj = currentProject();
+  const r = await fetch('/api/git/branches?project=' + encodeURIComponent(proj));
+  const d = await r.json();
+  const sel = document.getElementById('git_branch');
+  sel.innerHTML = '';
+  (d.branches || []).forEach((name) => {
+    const o = document.createElement('option');
+    o.value = name;
+    o.textContent = name === d.current ? name + ' (current)' : name;
+    sel.appendChild(o);
+  });
+  if (d.current) sel.value = d.current;
+}
+
+
+
+
 /* Oppskrifter dropdown */
 async function fetchRecipes() {
   const r = await fetch('/api/recipes');
@@ -95,6 +129,84 @@ async function fetchRecipes() {
     pop.appendChild(p);
   }
 }
+// Quick status
+const elGitStatus = document.getElementById('git_status');
+if (elGitStatus) elGitStatus.onclick = () =>
+  withStatus('git','out_git', async () => runTool('git', { args: { action:'status' } }, 'out_git'));
+
+// Quick sync (fetch + pull --ff-only)
+const elGitSync = document.getElementById('git_sync');
+if (elGitSync) elGitSync.onclick = () =>
+  withStatus('git','out_git', async () => {
+    const branch = document.getElementById('git_branch')?.value;
+    const remote = document.getElementById('git_remote')?.value || 'origin';
+    return runTool('git', { args: { action:'sync', branch, remote } }, 'out_git');
+  });
+
+// Switch
+const elGitSwitch = document.getElementById('git_switch');
+if (elGitSwitch) elGitSwitch.onclick = () =>
+  withStatus('git','out_git', async () => {
+    const branch = document.getElementById('git_branch')?.value;
+    return runTool('git', { args: { action:'switch', branch } }, 'out_git');
+  });
+
+// Create
+const elGitCreate = document.getElementById('git_create');
+if (elGitCreate) elGitCreate.onclick = () =>
+  withStatus('git','out_git', async () => {
+    const branch = document.getElementById('git_newbranch')?.value.trim();
+    const base = document.getElementById('git_base')?.value.trim();
+    return runTool('git', { args: { action:'create', branch, base } }, 'out_git');
+  });
+
+// Merge → main
+const elGitMergeMain = document.getElementById('git_merge_main');
+if (elGitMergeMain) elGitMergeMain.onclick = () =>
+  withStatus('git','out_git', async () => {
+    const source = document.getElementById('git_branch')?.value;
+    const target = 'main';
+    return runTool('git', { args: { action:'merge', source, target, confirm:true } }, 'out_git');
+  });
+
+// Push
+const elGitPush = document.getElementById('git_push');
+if (elGitPush) elGitPush.onclick = () =>
+  withStatus('git','out_git', async () => {
+    const branch = document.getElementById('git_branch')?.value;
+    const remote = document.getElementById('git_remote')?.value || 'origin';
+    const confirmProtected = document.getElementById('git_confirm')?.checked || false;
+    return runTool('git', { args: { action:'push', branch, remote, confirm: confirmProtected } }, 'out_git');
+  });
+
+// ACP
+const elGitAcp = document.getElementById('git_acp');
+if (elGitAcp) elGitAcp.onclick = () =>
+  withStatus('git','out_git', async () => {
+    const branch = document.getElementById('git_branch')?.value;
+    const remote = document.getElementById('git_remote')?.value || 'origin';
+    const msg = document.getElementById('git_message')?.value || '';
+    const confirmProtected = document.getElementById('git_confirm')?.checked || false;
+    return runTool('git', { args: { action:'acp', branch, remote, message: msg, confirm: confirmProtected } }, 'out_git');
+  });
+
+// Diff
+const elGitDiff = document.getElementById('git_diff');
+if (elGitDiff) elGitDiff.onclick = () =>
+  withStatus('git','out_git', async () => {
+    const staged = document.getElementById('git_staged')?.checked || false;
+    return runTool('git', { args: { action:'diff', staged } }, 'out_git');
+  });
+
+// Log
+const elGitLog = document.getElementById('git_log');
+if (elGitLog) elGitLog.onclick = () =>
+  withStatus('git','out_git', async () => {
+    const n = parseInt(document.getElementById('git_log_n')?.value || '10', 10);
+    return runTool('git', { args: { action:'log', n } }, 'out_git');
+  });
+
+
 document.getElementById('recipes_toggle').onclick = (e) => {
   e.stopPropagation();
   document.getElementById('recipes_pop').classList.toggle('show');
@@ -117,9 +229,11 @@ function guessOutputTarget(tool) {
             ? 'out_clean'
             : tool === 'backup'
               ? 'out_backup'
-              : tool === 'settings'
-                ? 'out_settings'
-                : 'out_gh';
+              : tool === 'git'          
+                ? 'out_git'
+                : tool === 'settings'
+                  ? 'out_settings'
+                  : 'out_gh';
 }
 function savePrefs() {
   const proj = currentProject();
@@ -1188,6 +1302,14 @@ setLamp('status_init', 'busy');
 (async function init() {
   try {
     await fetchProjects();
+    await fetchGitRemotes();
+    await fetchGitBranches();
+    // Oppdater dropdowns når prosjekt endres
+    document.getElementById('project').addEventListener('change', async ()=>{
+      await fetchGitRemotes();
+      await fetchGitBranches();
+    });
+
     await fetchRecipes();
     await fetchBackupInfo();
     await fetchBackupProfiles();
@@ -1201,6 +1323,7 @@ setLamp('status_init', 'busy');
         .catch(() => ({ global: {} }));
       setActiveTool(s?.global?.default_tool || 'search');
     }
+    
     await loadSettings();
     await loadFormatUIFromConfig();
     loadPrefs();

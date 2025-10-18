@@ -1,0 +1,8 @@
+{
+  "git": {
+    "default_remote": "origin",
+    "default_base": "main",
+    "protected_branches": ["main", "master", "release/*"]
+  }
+}
+
