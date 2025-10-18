@@ -10,7 +10,7 @@
       "name": "Paste: python + md",
       "tool": "paste",
       "desc": "Globalt filnavn-søk på README.md og alle .py",
-      "args": { "filename_search": true, "include": ["**/*.py", "README.md"], "exclude": ["**/.git/**","**/venv/**"], "max_lines": 4000 }
+      "args": { "filename_search": true, "include": ["**/*.py", "README.md"], "exclude": ["**/.git/**", "**/venv/**"], "max_lines": 4000 }
     },
     {
       "name": "Format: dry-run",

@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Kompatibilitets-wrapper for tidligere bruksmønster:
   ./backup.sh 1.06 Frontend_OK
 Nå rutes dette til backup.py sin fleksible CLI.
 """
 from __future__ import annotations
+
 import os
 import sys
 from pathlib import Path
-from typing import List, Optional
+
 HERE = Path(__file__).resolve().parent
-def main(argv: Optional[List[str]] = None) -> int:
+
+def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     SOURCE_DEFAULT = os.getenv("BACKUP_SOURCE_DEFAULT")
     PROJECT_DEFAULT = os.getenv("BACKUP_PROJECT_DEFAULT")
@@ -41,5 +42,6 @@ def main(argv: Optional[List[str]] = None) -> int:
         cmd += ["--tag", tag]
     os.execv(sys.executable, cmd)
     return 0
+
 if __name__ == "__main__":
     raise SystemExit(main())

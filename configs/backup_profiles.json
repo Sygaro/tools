@@ -25,7 +25,7 @@
       "dry_run": false,
       "verbose": true
     },
-     "backup_app": {
+    "backup_app": {
       "project": "backup_app",
       "source": "backup_app",
       "keep": 200,

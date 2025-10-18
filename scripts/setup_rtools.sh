@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
 # ───────────── colors & helpers ─────────────
 if command -v tput >/dev/null 2>&1; then
   T_BLUE="$(tput setaf 4)"; T_GREEN="$(tput setaf 2)"; T_YELLOW="$(tput setaf 3)"; T_RED="$(tput setaf 1)"; T_DIM="$(tput dim)"; T_BOLD="$(tput bold)"; T_RESET="$(tput sgr0)"
@@ -13,25 +12,19 @@ warn(){ printf "${T_YELLOW}⚠${T_RESET}  %s\n" "$*"; }
 err(){  printf "${T_RED}✗${T_RESET}  %s\n" "$*" >&2; }
 ask_yn(){ local q="$1" def="${2:-y}" ans; local hint=$([ "$def" = y ] && echo "${T_DIM}[${T_BOLD}Y${T_RESET}${T_DIM}/n]${T_RESET}" || echo "${T_DIM}[y/${T_BOLD}N${T_RESET}${T_DIM}]${T_RESET}"); read -r -p "$(printf "%s %b " "$q" "$hint")" ans || true; ans="${ans:-$def}"; [[ "${ans,,}" == "y" ]]; }
 ask_in(){ local q="$1" def="${2:-}"; read -r -p "$(printf "%s %b " "$q" "${T_DIM}(Enter=${def})${T_RESET}")" ans || true; echo "${ans:-$def}"; }
-
 # ───────────── require sudo ─────────────
 if [[ "${EUID}" -ne 0 || -z "${SUDO_USER:-}" ]]; then
   err "Kjør med sudo: ${T_BOLD}sudo bash scripts/setup_rtools.sh${T_RESET}"
   exit 1
 fi
-
 USER_NAME="${SUDO_USER}"
 USER_HOME="$(getent passwd "$USER_NAME" | cut -d: -f6)"
 [[ -d "$USER_HOME" ]] || { err "Fant ikke hjemmekatalog for $USER_NAME"; exit 1; }
 USER_SHELL="$(getent passwd "$USER_NAME" | cut -d: -f7)"
-
 as_user() { sudo -u "$USER_NAME" -H bash -lc "$*"; }
-
 # ---------- sanity ----------
 command -v python3 >/dev/null || { err "python3 mangler (sudo apt-get install -y python3 python3-venv)"; exit 1; }
 command -v curl >/dev/null || warn "curl mangler – anbefalt for diagnose."
-
-
 # ───────────── paths ─────────────
 if [[ -f "./requirements.txt" && -d "./r_tools" ]]; then
   TOOLS_DIR="$(pwd)"
@@ -39,17 +32,14 @@ else
   TOOLS_DIR="$(ask_in "Sti til 'tools'-repo" "$USER_HOME/tools")"
 fi
 [[ -d "$TOOLS_DIR" ]] || { err "Katalog finnes ikke: $TOOLS_DIR"; exit 1; }
-
 VENV_DIR="$TOOLS_DIR/venv"
 CONFIG_DIR="$TOOLS_DIR/configs"
 ENV_DIR="$USER_HOME/.config/rtools"
 ENV_FILE="$ENV_DIR/env"
 SERVICE_PATH="/etc/systemd/system/rtools.service"
 PORT_DEFAULT="8765"
-
 info "Installerer for ${T_BOLD}$USER_NAME${T_RESET} i ${T_BOLD}$TOOLS_DIR${T_RESET}"
 install -d -m 0755 -o "$USER_NAME" -g "$USER_NAME" "$ENV_DIR"
-
 # ───────────── optional deps (root) ─────────────
 if ! command -v jq >/dev/null 2>&1; then
   if ask_yn "Installere 'jq' (for å skrive JSON)?" y; then
@@ -65,18 +55,15 @@ if ! dpkg -s python3-venv >/dev/null 2>&1; then
     err "python3-venv mangler – kan ikke lage virtuellenv."; exit 1
   fi
 fi
-
 # ───────────── venv + deps (as user) ─────────────
 if [[ ! -d "$VENV_DIR" ]]; then
   info "Lager venv (eies av $USER_NAME)…"
   as_user "python3 -m venv '$VENV_DIR'"
   ok "Venv opprettet: $VENV_DIR"
 fi
-
 info "Oppgraderer pip/setuptools/wheel…"
 as_user "'$VENV_DIR/bin/python' -m pip install --upgrade pip setuptools wheel >/dev/null"
 ok "pip/setuptools/wheel oppdatert"
-
 if [[ -f "$TOOLS_DIR/requirements.txt" ]]; then
   info "Installerer avhengigheter fra requirements.txt…"
   as_user "'$VENV_DIR/bin/python' -m pip install -r '$TOOLS_DIR/requirements.txt'"
@@ -84,7 +71,6 @@ if [[ -f "$TOOLS_DIR/requirements.txt" ]]; then
 else
   warn "Fant ikke requirements.txt – hopper over."
 fi
-
 # ───────────── shell-miljø for bruker ─────────────
 BASHRC="$USER_HOME/.bashrc"
 info "Oppdaterer ${T_BOLD}$BASHRC${T_RESET} (PATH + RTOOLS_CONFIG_DIR)…"
@@ -103,7 +89,6 @@ fi
 # ───────────── rt-kommando ─────────────
 # ───────────── Bruk prosjektets bin/rt ─────────────
 RT_PROJECT="$TOOLS_DIR/bin/rt"
-
 if [[ ! -x "$RT_PROJECT" ]]; then
   if [[ -f "$RT_PROJECT" ]]; then
     chmod +x "$RT_PROJECT"
@@ -112,26 +97,27 @@ if [[ ! -x "$RT_PROJECT" ]]; then
     exit 1
   fi
 fi
-
 # Lag bruker-lokal symlink ~/.local/bin/rt -> $TOOLS_DIR/bin/rt
-USER_LOCAL_BIN="$USER_HOME/tools/bin"
+USER_LOCAL_BIN="$USER_HOME/.local/bin"
 install -d -m 0755 -o "$USER_NAME" -g "$USER_NAME" "$USER_LOCAL_BIN"
-
-RT_LINK="$USER_LOCAL_BIN/rt"
-
-# Tilby system-wide symlink (valgfritt)
-if ask_yn "Opprette system-wide symlink /usr/local/bin/rt også?" y; then
-  ln -sf "$RT_LINK" /usr/local/bin/rt
-  ok "Laget /usr/local/bin/rt → $RT_LINK"
+# Create user-local symlink ~/.local/bin/rt -> $TOOLS_DIR/bin/rt
+ln -sf "$RT_PROJECT" "$USER_LOCAL_BIN/rt"
+ok "Laget $USER_LOCAL_BIN/rt → $RT_PROJECT"
+# Ensure ~/.local/bin is in PATH for the user
+if ! grep -q '~/.local/bin' "$BASHRC" 2>/dev/null; then
+  { echo 'export PATH="$HOME/.local/bin:$PATH"'; } >> "$BASHRC"
 fi
-
+# Optional system-wide symlink points directly to project script
+if ask_yn "Opprette system-wide symlink /usr/local/bin/rt også?" y; then
+  ln -sf "$RT_PROJECT" /usr/local/bin/rt
+  ok "Laget /usr/local/bin/rt → $RT_PROJECT"
+fi
 # ───────────── configs: sjekk & evt. generer (as root, deretter chown) ─────────────
 NEEDED=( projects_config.json recipes_config.json search_config.json paste_config.json format_config.json clean_config.json gh_raw_config.json global_config.json backup_config.json backup_profiles.json )
 MISSING=()
 for f in "${NEEDED[@]}"; do
   [[ -f "$CONFIG_DIR/$f" ]] || MISSING+=("$f")
 done
-
 create_configs(){
   install -d -m 0755 -o "$USER_NAME" -g "$USER_NAME" "$CONFIG_DIR"
   cat > "$CONFIG_DIR/backup_config.json" <<'JSON'
@@ -169,7 +155,7 @@ JSON
   }
 }
 JSON
-  cat > "$CONFIG_DIR/format_config.json" <<'JSON'
+    cat > "$CONFIG_DIR/format_config.json" <<'JSON'
 {
   "format": {
     "prettier": { "enable": true, "globs": ["**/*.{html,css,js}"] },
@@ -179,7 +165,7 @@ JSON
       "enable": true,
       "paths": [],
       "exts": [".py", ".js", ".ts", ".css", ".html", ".json", ".sh"],
-      "exclude_exts": [".md","venv/"],
+      "exclude_exts": [".md"],
       "compact_blocks": true,
       "max_consecutive_blanks": 0
     }
@@ -239,10 +225,8 @@ JSON
   cat > "$CONFIG_DIR/search_config.json" <<'JSON'
 { "search_terms": ["\\bTODO\\b", "\\bFIXME\\b"] }
 JSON
-
   chown -R "$USER_NAME":"$USER_NAME" "$CONFIG_DIR"
 }
-
 if (( ${#MISSING[@]} )); then
   warn "Mangler config-filer i $CONFIG_DIR:"
   printf ' - %s\n' "${MISSING[@]}"
@@ -254,7 +238,6 @@ else
   ok "Alle forventede config-filer finnes."
   chown -R "$USER_NAME":"$USER_NAME" "$CONFIG_DIR" || true
 fi
-
 # ───────────── interaktive innstillinger (as user for jq moves) ─────────────
 if ask_yn "Sette default project nå?" n; then
   DEF_PROJ="$(ask_in "Absolutt sti til prosjekt" "$USER_HOME/countdown")"
@@ -267,7 +250,6 @@ if ask_yn "Sette default project nå?" n; then
   chown "$USER_NAME":"$USER_NAME" "$CONFIG_DIR/global_config.json"
   ok "Default project satt: $DEF_PROJ"
 fi
-
 if ask_yn "Sette default tool (search/paste/format/clean/gh-raw/backup)?" n; then
   DEF_TOOL="$(ask_in "Tool" "search")"
   if command -v jq >/dev/null 2>&1 && [[ -f "$CONFIG_DIR/global_config.json" ]]; then
@@ -279,7 +261,6 @@ if ask_yn "Sette default tool (search/paste/format/clean/gh-raw/backup)?" n; the
   chown "$USER_NAME":"$USER_NAME" "$CONFIG_DIR/global_config.json"
   ok "Default tool satt: $DEF_TOOL"
 fi
-
 if ask_yn "Oppdatere sti til backup.py i backup_config.json?" n; then
   BK_SCRIPT="$(ask_in "Sti til backup.py" "$TOOLS_DIR/backup_app/backup.py")"
   if command -v jq >/dev/null 2>&1 && [[ -f "$CONFIG_DIR/backup_config.json" ]]; then
@@ -291,11 +272,8 @@ if ask_yn "Oppdatere sti til backup.py i backup_config.json?" n; then
   chown "$USER_NAME":"$USER_NAME" "$CONFIG_DIR/backup_config.json"
   ok "backup_config.json oppdatert."
 fi
-
-
 # ───────────── Port ─────────────
 PORT="$(ask_in "Port for UI" "$PORT_DEFAULT")"
-
 # ───────────── systemd (valg) ─────────────
 if ask_yn "Opprette og starte systemd-tjenesten for r_tools UI nå?" y; then
   info "Oppretter systemd-service (rtools) på port $PORT"
@@ -304,7 +282,6 @@ if ask_yn "Opprette og starte systemd-tjenesten for r_tools UI nå?" y; then
 Description=r_tools UI (uvicorn)
 After=network-online.target
 Wants=network-online.target
-
 [Service]
 Type=simple
 User=$USER_NAME
@@ -315,11 +292,9 @@ EnvironmentFile=-$ENV_FILE
 ExecStart=$VENV_DIR/bin/python -m uvicorn r_tools.tools.webui:app --host 0.0.0.0 --port $PORT
 Restart=on-failure
 RestartSec=3
-
 [Install]
 WantedBy=multi-user.target
 UNIT
-
   systemctl daemon-reload
   systemctl enable --now rtools || { err "Kunne ikke starte/enable systemd-tjenesten. Se 'journalctl -u rtools -e'."; exit 1; }
   ok "Systemd-tjenesten 'rtools' er aktiv."
@@ -327,23 +302,18 @@ else
   info "Du kan starte UI manuelt slik:"
   echo "  ${T_BOLD}cd '$TOOLS_DIR' && '$VENV_DIR/bin/python' -m uvicorn r_tools.tools.webui:app --host 0.0.0.0 --port $PORT${T_RESET}"
 fi
-
 # ───────────── sørg for riktig eierskap på alt vi kan ha endret ─────────────
 chown -R "$USER_NAME":"$USER_NAME" "$VENV_DIR" "$CONFIG_DIR" "$ENV_DIR" 2>/dev/null || true
-
 # ───────────── summary ─────────────
 cat <<EOF
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${T_GREEN}✅ Ferdig!${T_RESET}
-
 • Repo:            $TOOLS_DIR
 • Venv:            $VENV_DIR  ${T_DIM}(eier: $USER_NAME)${T_RESET}
 • Config-dir:      $CONFIG_DIR  ${T_DIM}(eier: $USER_NAME)${T_RESET}
 • UI-port:         $PORT
 • Systemd-unit:    $SERVICE_PATH ${T_DIM}(root)${T_RESET}
 • Kjører som:      $USER_NAME
-
 Nyttig:
   - Sjekk status:       ${T_BOLD}systemctl status rtools${T_RESET}
   - Live logger:        ${T_BOLD}journalctl -u rtools -f${T_RESET}

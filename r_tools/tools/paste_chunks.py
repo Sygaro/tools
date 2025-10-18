@@ -1,4 +1,4 @@
-# /home/reidar/tools/r_tools/tools/paste_chunks.py
+# ./tools/r_tools/tools/paste_chunks.py
 """
 Integrasjon av make_paste_chunks.py:
 - Leser config: cfg['paste'] {root,out_dir,max_lines,allow_binary,include,exclude,only_globs,skip_globs,filename_search}
@@ -7,19 +7,22 @@ Integrasjon av make_paste_chunks.py:
 - filename_search: mønstre uten '/' tolkes som globale ('**/<mønster>') for både include og exclude
 """
 from __future__ import annotations
-from pathlib import Path
-from typing import List, Tuple, Dict
+
 import hashlib
+from pathlib import Path
+
 FRAME_TOP = "===== BEGIN FILE ====="
 FRAME_END = "===== END FILE ====="
 CODE_BEGIN = "----- BEGIN CODE -----"
 CODE_END = "----- END CODE -----"
+
 def _sha256_file(path: Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as f:
         for chunk in iter(lambda: f.read(8192), b""):
             h.update(chunk)
     return h.hexdigest()
+
 def _is_text_utf8(path: Path) -> bool:
     try:
         with path.open("rb") as f:
@@ -28,13 +31,16 @@ def _is_text_utf8(path: Path) -> bool:
         return True
     except Exception:
         return False
+
 def _read_text_utf8(path: Path) -> str:
     with path.open("rb") as f:
         data = f.read()
     return data.decode("utf-8", errors="replace")
+
 def _normalize_newlines(s: str) -> str:
     return s.replace("\r\n", "\n").replace("\r", "\n")
-def _brace_expand_one(pattern: str) -> List[str]:
+
+def _brace_expand_one(pattern: str) -> list[str]:
     start = pattern.find("{")
     if start == -1:
         return [pattern]
@@ -50,17 +56,18 @@ def _brace_expand_one(pattern: str) -> List[str]:
                 after = pattern[i + 1 :]
                 parts = [p.strip() for p in inside.split(",") if p.strip()]
                 expanded = [before + p + after for p in parts]
-                result: List[str] = []
+                result: list[str] = []
                 for e in expanded:
                     result.extend(_brace_expand_one(e))
                 return result
     return [pattern]
-def _brace_expand(pattern: str) -> List[str]:
+
+def _brace_expand(pattern: str) -> list[str]:
     acc = [pattern]
     changed = True
     while changed:
         changed = False
-        new_acc: List[str] = []
+        new_acc: list[str] = []
         for p in acc:
             expanded = _brace_expand_one(p)
             if len(expanded) > 1 or expanded[0] != p:
@@ -68,12 +75,14 @@ def _brace_expand(pattern: str) -> List[str]:
             new_acc.extend(expanded)
         acc = new_acc
     return acc
+
 def _normalize_pattern(pat: str) -> str:
     while pat.startswith("/"):
         pat = pat[1:]
     return pat
-def _expand_patterns(patterns: List[str]) -> List[str]:
-    out: List[str] = []
+
+def _expand_patterns(patterns: list[str]) -> list[str]:
+    out: list[str] = []
     for pat in patterns or []:
         pat = _normalize_pattern(pat)
         out.extend(_brace_expand(pat))
@@ -83,24 +92,26 @@ def _expand_patterns(patterns: List[str]) -> List[str]:
             seen.add(p)
             uniq.append(p)
     return uniq
-def _apply_filename_search(patterns: List[str], filename_search: bool) -> List[str]:
+
+def _apply_filename_search(patterns: list[str], filename_search: bool) -> list[str]:
     """Når på: mønstre uten '/' blir '**/<mønster>' for global match."""
     if not filename_search:
         return patterns or []
-    out: List[str] = []
+    out: list[str] = []
     for pat in patterns or []:
         if ("/" not in pat) and (not pat.startswith("**/")):
             out.append(f"**/{pat}")
         else:
             out.append(pat)
     return out
+
 def _collect_files(
     root: Path,
-    includes: List[str],
-    excludes: List[str],
-    only_globs: List[str] | None,
-    skip_globs: List[str] | None,
-) -> List[Path]:
+    includes: list[str],
+    excludes: list[str],
+    only_globs: list[str] | None,
+    skip_globs: list[str] | None,
+) -> list[Path]:
     root = root.resolve()
     includes = _expand_patterns(includes)
     excludes = _expand_patterns(excludes)
@@ -145,6 +156,7 @@ def _collect_files(
                         exclude_set.add(sub.resolve())
     files = sorted([p for p in candidates if p in include_set and p not in exclude_set])
     return files
+
 def _build_framed_block(path: Path, content: str, sha256: str) -> str:
     content = _normalize_newlines(content)
     line_count = content.count("\n") + (0 if content.endswith("\n") else 1)
@@ -158,14 +170,14 @@ def _build_framed_block(path: Path, content: str, sha256: str) -> str:
     ]
     footer = [CODE_END, FRAME_END]
     return "\n".join(header) + "\n" + content + "\n" + "\n".join(footer) + "\n"
-def _write_chunks(
-    blocks: List[Tuple[Path, str]], out_dir: Path, max_lines: int
-) -> List[Path]:
+
+def _write_chunks(blocks: list[tuple[Path, str]], out_dir: Path, max_lines: int) -> list[Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
-    outputs: List[Path] = []
-    buf: List[str] = []
+    outputs: list[Path] = []
+    buf: list[str] = []
     buf_lines = 0
     part = 1
+
     def flush():
         nonlocal buf, buf_lines, part
         if not buf:
@@ -176,8 +188,10 @@ def _write_chunks(
         outputs.append(out_path)
         buf = []
         buf_lines = 0
+
     def count_lines(s: str) -> int:
         return s.count("\n") + (0 if s.endswith("\n") else 1)
+
     for _path, block in blocks:
         block_lines = count_lines(block)
         if buf_lines + block_lines > max_lines and buf:
@@ -187,7 +201,8 @@ def _write_chunks(
         buf_lines += block_lines
     flush()
     return outputs
-def _create_index(mapping: List[Tuple[Path, Path]], out_dir: Path) -> Path:
+
+def _create_index(mapping: list[tuple[Path, Path]], out_dir: Path) -> Path:
     index_path = out_dir / "INDEX.txt"
     with index_path.open("w", encoding="utf-8") as f:
         f.write("# Index over filer og hvilken paste_NNN.txt de ligger i\n\n")
@@ -198,7 +213,8 @@ def _create_index(mapping: List[Tuple[Path, Path]], out_dir: Path) -> Path:
                 current = out_file
             f.write(f"- {src.as_posix()}\n")
     return index_path
-def _write_files_list(root: Path, sources: List[Path], out_dir: Path) -> Path:
+
+def _write_files_list(root: Path, sources: list[Path], out_dir: Path) -> Path:
     """Skriv FILES.txt med alle inkluderte filer (relative paths)."""
     files_txt = out_dir / "FILES.txt"
     rels = [s.relative_to(root).as_posix() for s in sources]
@@ -207,6 +223,7 @@ def _write_files_list(root: Path, sources: List[Path], out_dir: Path) -> Path:
         for r in rels:
             f.write(r + "\n")
     return files_txt
+
 def _resolve_relative(root: Path, maybe_path: str | None, default_rel: str) -> Path:
     if not maybe_path:
         return (root / default_rel).resolve()
@@ -214,8 +231,9 @@ def _resolve_relative(root: Path, maybe_path: str | None, default_rel: str) -> P
     if p.is_absolute():
         return p.resolve()
     return (root / p).resolve()
-def run_paste(cfg: Dict, list_only: bool = False) -> None:
-    pcfg: Dict = cfg.get("paste", {})
+
+def run_paste(cfg: dict, list_only: bool = False) -> None:
+    pcfg: dict = cfg.get("paste", {})
     project_root = Path(cfg.get("project_root", ".")).resolve()
     root = _resolve_relative(project_root, pcfg.get("root", "."), ".")
     out_dir = _resolve_relative(root, pcfg.get("out_dir", "paste_out"), "paste_out")
@@ -226,9 +244,23 @@ def run_paste(cfg: Dict, list_only: bool = False) -> None:
     max_lines = int(pcfg.get("max_lines", 4000))
     allow_binary = bool(pcfg.get("allow_binary", False))
     filename_search = bool(pcfg.get("filename_search", False))
+    # Globale ekskluderinger fra global_config.json
+    global_excl_dirs = [str(d).strip("/").rstrip("/") for d in (cfg.get("exclude_dirs") or [])]
+    global_excl_files = [str(f).strip() for f in (cfg.get("exclude_files") or [])]
     # Filnavn-søk: utvid både include og exclude
     includes = _apply_filename_search(includes, filename_search)
     excludes = _apply_filename_search(excludes, filename_search)
+    # Legg på globale ekskluderinger som skip_globs
+    #  - kataloger: **/<dir>/**
+    #  - filer: **/<filnavn>
+    for d in global_excl_dirs:
+        pattern = f"**/{d}/**"
+        if pattern not in skip_globs:
+            skip_globs.append(pattern)
+    for f in global_excl_files:
+        pattern = f"**/{f}"
+        if pattern not in skip_globs:
+            skip_globs.append(pattern)
     sources = _collect_files(root, includes, excludes, only_globs, skip_globs)
     if not sources:
         print("Ingen filer funnet med de angitte mønstrene.")
@@ -238,8 +270,8 @@ def run_paste(cfg: Dict, list_only: bool = False) -> None:
         for s in sources:
             print("-", s.relative_to(root).as_posix())
         return
-    blocks: List[Tuple[Path, str]] = []
-    skipped: List[Path] = []
+    blocks: list[tuple[Path, str]] = []
+    skipped: list[Path] = []
     for src in sources:
         if _is_text_utf8(src):
             text = _read_text_utf8(src)
@@ -259,7 +291,7 @@ def run_paste(cfg: Dict, list_only: bool = False) -> None:
                 skipped.append(src)
     blocks.sort(key=lambda t: t[0].as_posix())
     outputs = _write_chunks(blocks, out_dir, max_lines)
-    mapping: List[Tuple[Path, Path]] = []
+    mapping: list[tuple[Path, Path]] = []
     for out_file in outputs:
         with out_file.open("r", encoding="utf-8") as f:
             for line in f:
@@ -267,7 +299,6 @@ def run_paste(cfg: Dict, list_only: bool = False) -> None:
                     p = line.strip().split("PATH: ", 1)[1]
                     mapping.append((out_file, Path(p)))
     index_path = _create_index(mapping, out_dir)
-    # Skriv og vis inkluderte filer
     files_list_path = _write_files_list(root, sources, out_dir)
     print(f"Skrev {len(outputs)} output-fil(er) til: {out_dir.as_posix()}")
     for p in outputs:
@@ -275,9 +306,7 @@ def run_paste(cfg: Dict, list_only: bool = False) -> None:
             lc = sum(1 for _ in fh)
         print(f" - {p.name}  ({lc} linjer)")
     if skipped:
-        print(
-            "\nHoppet over binær/ikke-UTF8-filer (sett paste.allow_binary=true for å inkludere):"
-        )
+        print("\nHoppet over binær/ikke-UTF8-filer (sett paste.allow_binary=true for å inkludere):")
         for s in skipped:
             print(f" - {s.relative_to(root).as_posix()}")
     print("\nInkluderte filer:")

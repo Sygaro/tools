@@ -1,6 +1,8 @@
 # tools/extra/dropbox_get_refresh_token.py
 import os
+
 from dropbox import DropboxOAuth2FlowNoRedirect
+
 APP_KEY = os.environ.get("DROPBOX_APP_KEY") or input("APP_KEY: ").strip()
 APP_SECRET = os.environ.get("DROPBOX_APP_SECRET") or input("APP_SECRET: ").strip()
 # Be om offline-tilgang (gir refresh token)

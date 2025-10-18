@@ -1,10 +1,11 @@
-# /home/reidar/tools/uploader_dropbox.py
-# -*- coding: utf-8 -*-
+# ./tools/uploader_dropbox.py
+import os
 from pathlib import Path
 from typing import Literal
-import os
+
 import dropbox
 from dropbox.files import WriteMode
+
 def _make_dbx() -> dropbox.Dropbox:
     # Kun refresh-token flyt
     refresh = os.getenv("DROPBOX_REFRESH_TOKEN")
@@ -20,14 +21,13 @@ def _make_dbx() -> dropbox.Dropbox:
         if not v
     ]
     if missing:
-        raise RuntimeError(
-            "Mangler miljøvariabler for Dropbox:\n  - " + "\n  - ".join(missing)
-        )
+        raise RuntimeError("Mangler miljøvariabler for Dropbox:\n  - " + "\n  - ".join(missing))
     return dropbox.Dropbox(
         oauth2_refresh_token=refresh,
         app_key=app_key,
         app_secret=app_secret,
     )
+
 def upload_to_dropbox(
     local_path: Path,
     dest_path: str,
@@ -48,9 +48,7 @@ def upload_to_dropbox(
             dbx.files_upload(f.read(), dest_path, mode=write_mode, mute=True)
             return
         start = dbx.files_upload_session_start(f.read(chunk_size))
-        cursor = dropbox.files.UploadSessionCursor(
-            session_id=start.session_id, offset=f.tell()
-        )
+        cursor = dropbox.files.UploadSessionCursor(session_id=start.session_id, offset=f.tell())
         commit = dropbox.files.CommitInfo(path=dest_path, mode=write_mode, mute=True)
         while f.tell() < file_size:
             if (file_size - f.tell()) <= chunk_size:

@@ -1,13 +1,16 @@
-# /home/reidar/tools/r_tools/config.py
+# ./tools/r_tools/config.py
 from __future__ import annotations
-import json, os
+
+import json
+import os
 from pathlib import Path
-from typing import Any, Dict, Tuple, Optional
+from typing import Any
+
 TOOLS_ROOT = Path(__file__).resolve().parents[1]
 GLOBAL_CONFIG = TOOLS_ROOT / "configs" / "global_config.json"
 CONFIG_DIR = Path(os.environ.get("RTOOLS_CONFIG_DIR", str(TOOLS_ROOT / "configs"))).resolve()
 
-def _load_json(path: Path) -> Dict[str, Any]:
+def _load_json(path: Path) -> dict[str, Any]:
     if not path.is_file():
         return {}
     try:
@@ -22,7 +25,8 @@ def _load_json(path: Path) -> Dict[str, Any]:
     except Exception as e:
         print(f"[advarsel] Kunne ikke lese {path}: {e}")
         return {}
-def deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+
+def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     out = dict(base)
     for k, v in override.items():
         if isinstance(v, dict) and isinstance(out.get(k), dict):
@@ -30,8 +34,9 @@ def deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]
         else:
             out[k] = v
     return out
-def _flatten(d: Dict[str, Any], prefix: str = "") -> Dict[str, Any]:
-    flat: Dict[str, Any] = {}
+
+def _flatten(d: dict[str, Any], prefix: str = "") -> dict[str, Any]:
+    flat: dict[str, Any] = {}
     for k, v in d.items():
         key = f"{prefix}.{k}" if prefix else k
         if isinstance(v, dict):
@@ -39,23 +44,25 @@ def _flatten(d: Dict[str, Any], prefix: str = "") -> Dict[str, Any]:
         else:
             flat[key] = v
     return flat
+
 def _merge_with_provenance(
-    layers: list[tuple[str, Dict[str, Any]]],
-) -> tuple[Dict[str, Any], Dict[str, str]]:
-    merged: Dict[str, Any] = {}
-    prov: Dict[str, str] = {}
+    layers: list[tuple[str, dict[str, Any]]],
+) -> tuple[dict[str, Any], dict[str, str]]:
+    merged: dict[str, Any] = {}
+    prov: dict[str, str] = {}
     for name, cfg in layers:
         merged = deep_merge(merged, cfg)
         flat = _flatten(cfg)
         for k in flat.keys():
             prov[k] = name  # siste lag vinner
     return merged, prov
+
 def load_config_info(
-    tool_config_name: Optional[str] = None,
-    project_override: Optional[Path] = None,
-    cli_overrides: Optional[Dict[str, Any]] = None,
-) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    info: Dict[str, Any] = {
+    tool_config_name: str | None = None,
+    project_override: Path | None = None,
+    cli_overrides: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    info: dict[str, Any] = {
         "tools_root": str(TOOLS_ROOT),
         "global_config": str(GLOBAL_CONFIG),
         "tool_config": None,
@@ -63,7 +70,7 @@ def load_config_info(
         "project_override": str(project_override) if project_override else None,
         "cli_overrides": cli_overrides or {},
     }
-    layers: list[tuple[str, Dict[str, Any]]] = []
+    layers: list[tuple[str, dict[str, Any]]] = []
     g = _load_json(GLOBAL_CONFIG)
     layers.append(("global_config", g))
     tool_cfg_path = None
@@ -86,10 +93,11 @@ def load_config_info(
     cfg.setdefault("case_insensitive", True)
     info["provenance"] = prov
     return cfg, info
+
 def load_config(
-    tool_config_name: Optional[str] = None,
-    project_override: Optional[Path] = None,
-    cli_overrides: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    tool_config_name: str | None = None,
+    project_override: Path | None = None,
+    cli_overrides: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     cfg, _ = load_config_info(tool_config_name, project_override, cli_overrides)
     return cfg

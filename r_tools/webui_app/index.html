@@ -1,0 +1,515 @@
+<!-- /home/reidar/tools/r_tools/webui_app/index.html -->
+<!doctype html>
+<html lang="no">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>r_tools UI</title>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="inline">
+      <h1 style="flex: 1">r_tools UI</h1>
+      <!-- Globale lamper -->
+      <div class="inline" style="gap: 6px"><span class="muted">Init</span><span class="lamp" id="status_init"></span></div>
+      <div class="inline" style="gap: 6px">
+        <span class="muted">Verktøy</span><span class="lamp" id="status_global"></span>
+        <span id="status_label" class="muted">(ingen)</span>
+      </div>
+      <!-- Tabs -->
+      <div class="tabs" id="tabs">
+        <button class="tab" data-tool="search">Search</button>
+        <button class="tab" data-tool="replace">Replace</button>
+        <button class="tab" data-tool="paste">Paste</button>
+        <button class="tab" data-tool="format">Format</button>
+        <button class="tab" data-tool="clean">Clean</button>
+        <button class="tab" data-tool="gh-raw">GH&nbsp;Raw</button>
+        <button class="tab" data-tool="backup">Backup</button>
+        <button class="tab" data-tool="settings">Settings</button>
+      </div>
+      <!-- Oppskrifter -->
+      <div class="recipes" id="recipes_box">
+        <button class="recipes-btn" id="recipes_toggle">Oppskrifter ▾</button>
+        <div class="recipes-pop" id="recipes_pop"></div>
+      </div>
+      <div>
+        <label for="project">Prosjekt</label>
+        <select id="project" title="Defineres i tools/configs/projects_config.json"></select>
+      </div>
+      <button class="btn" id="refresh">Oppdater</button>
+    </header>
+    <main>
+      <div class="row">
+        <!-- SEARCH -->
+        <section class="card tool tool-search" data-tool="search">
+          <div class="tool-header">
+            <div class="tool-title">Search <span class="lamp" id="status_search"></span></div>
+            <div class="tool-actions">
+              <button class="btn" id="run_search">Kjør search</button>
+            </div>
+          </div>
+          <div class="tool-body">
+            <div class="inline">
+              <label class="inline"><input type="checkbox" id="search_filename_search" /> Filnavn-søk globalt</label>
+              <label><input type="checkbox" id="search_all" /> Krev alle termer (--all)</label>
+              <label><input type="checkbox" id="search_case" /> Skill store/små (--case-sensitive)</label>
+              <label>Max size <input id="search_max" type="number" value="2000000" /></label>
+              <div class="inline">
+                <label><input type="checkbox" id="search_files_only" /> Kun fil-liste</label>
+                <label
+                  >Sti-format
+                  <select id="search_path_mode">
+                    <option value="relative">relative</option>
+                    <option value="full">full</option>
+                  </select>
+                </label>
+              </div>
+              <label>Termer (regex, separert med komma)</label>
+              <input id="search_terms" type="text" placeholder="f.eks: import\\s+os, class" />
+              <!-- NYTT: include/exclude + filnavn-søk globalt -->
+              <label>Include globs (en per linje – tomt = bruk config/standard)</label>
+              <textarea id="search_include" placeholder="**/*.py&#10;cli.py"></textarea>
+              <label>Exclude globs (en per linje)</label>
+              <textarea id="search_exclude" placeholder="**/.git/**&#10;**/venv/**"></textarea>
+              <label>Begrens til kataloger (én per linje; tom = ingen begrensning)</label>
+              <textarea id="search_limit_dirs" placeholder="app&#10;src/utils"></textarea>
+              <label>Begrens til filendelser (komma- eller linje-separert; tom = default)</label>
+              <input id="search_limit_exts" type="text" placeholder=".py,.js,.ts" />
+            </div>
+            <label>Resultat:</label>
+            <textarea id="out_search" readonly></textarea>
+            <p class="muted">Tomt felt → bruker ev. <code>search_terms</code> fra config.</p>
+          </div>
+        </section>
+        <!-- REPLACE -->
+        <section class="card tool tool-replace" data-tool="replace">
+          <div class="tool-header">
+            <div class="tool-title">Replace <span class="lamp" id="status_replace"></span></div>
+            <div class="tool-actions">
+              <label class="inline" style="gap: 6px"><input type="checkbox" id="rep_dry" checked /> Dry-run</label>
+              <button class="btn" id="run_replace">Kjør replace</button>
+            </div>
+          </div>
+          <div class="tool-body">
+            <!-- NYTT: Filnavn-søk globalt -->
+            <label class="inline"><input type="checkbox" id="rep_filename_search" /> Filnavn-søk globalt</label>
+            <label>Find (regex)</label>
+            <input id="rep_find" type="text" placeholder="f.eks: \\bTODO\\b" />
+            <label>Replace with</label>
+            <input id="rep_repl" type="text" placeholder="ny tekst" />
+            <div class="inline">
+              <label><input type="checkbox" id="rep_regex" checked /> Bruk regex</label>
+              <label><input type="checkbox" id="rep_case" /> Skill store/små</label>
+              <label><input type="checkbox" id="rep_backup" checked /> Lag .bak</label>
+              <label>Max size <input id="rep_max" type="number" value="2000000" /></label>
+              <label><input type="checkbox" id="rep_showdiff" checked /> Vis diff</label>
+            </div>
+            <label>Include globs (en per linje – tomt = standard fra config)</label>
+            <textarea id="rep_include" placeholder="**/*.py&#10;**/*.js"></textarea>
+            <label>Exclude globs (en per linje)</label>
+            <textarea id="rep_exclude" placeholder="**/.git/**&#10;**/venv/**"></textarea>
+            <textarea id="out_replace" readonly></textarea>
+            <div id="sum_replace" class="summary"></div>
+          </div>
+        </section>
+        <!-- PASTE -->
+        <section class="card tool tool-paste" data-tool="paste">
+          <div class="tool-header">
+            <div class="tool-title">Paste <span class="lamp" id="status_paste"></span></div>
+            <div class="tool-actions">
+              <button class="btn" id="run_paste">Kjør paste</button>
+            </div>
+          </div>
+          <div class="tool-body">
+            <div class="inline">
+              <label><input type="checkbox" id="paste_list_only" /> Kun liste</label>
+              <label><input type="checkbox" id="paste_filename_search" checked /> Filnavn-søk globalt</label>
+              <label>Max linjer<input id="paste_max" type="number" value="4000" /></label>
+            </div>
+            <label>Out dir (relativ til prosjekt)</label>
+            <input id="paste_out" type="text" placeholder="paste_out" />
+            <label>Include (linje per mønster)</label>
+            <textarea id="paste_include" placeholder="**/*.py&#10;README.md"></textarea>
+            <label>Exclude (linje per mønster)</label>
+            <textarea id="paste_exclude" placeholder="**/.git/**&#10;**/venv/**"></textarea>
+            <textarea id="out_paste" readonly></textarea>
+          </div>
+        </section>
+        <!-- FORMAT -->
+        <section class="card tool tool-format" data-tool="format">
+          <div class="tool-header">
+            <div class="tool-title">Format <span class="lamp" id="status_format"></span></div>
+            <div class="tool-actions">
+              <label class="inline" style="gap: 6px"><input type="checkbox" id="format_dry" checked /> Dry-run</label>
+              <button class="btn" id="fmt_load_cfg">Last fra default</button>
+              <button class="btn" id="fmt_save_cfg">Lagre som default</button>
+              <button class="btn" id="run_format">Kjør format</button>
+            </div>
+          </div>
+
+          <div class="tool-body">
+            <!-- Underfaner -->
+            <div class="tabs mini" id="fmt_tabs" style="margin-bottom: 8px">
+              <button class="tab fmt-tab active" data-fmt-tab="prettier">Prettier</button>
+              <button class="tab fmt-tab" data-fmt-tab="python">Python</button>
+              <button class="tab fmt-tab" data-fmt-tab="cleanup">Cleanup</button>
+              <span style="flex: 1"></span>
+              <div class="inline" style="gap: 6px">
+                <input
+                  id="fmt_preview_path"
+                  type="text"
+                  placeholder="relativ sti til fil for diff-forhåndsvisning (f.eks. app/main.py)"
+                  style="min-width: 300px"
+                />
+                <button class="btn" id="fmt_preview_btn">Forhåndsvis diff (dry-run)</button>
+              </div>
+            </div>
+
+            <!-- PRETTIER -->
+            <div class="fmt-pane active" data-fmt-pane="prettier">
+              <div class="grid two">
+                <label class="inline">
+                  <input type="checkbox" id="fmt_prettier_enable" />
+                  Aktiver Prettier
+                  <span class="help" data-tip="Slår på Prettier for relevante filer (html/css/js/ts/tsx/json/… basert på globs).">ⓘ</span>
+                </label>
+
+                <label>
+                  Globs
+                  <span
+                    class="help"
+                    data-tip="Hvilke filer Prettier skal formatere. Glob-mønstre relativt til prosjektrot. Eksempel: **/*.{html,css,js}"
+                    >ⓘ</span
+                  >
+                  <input id="fmt_prettier_globs" type="text" placeholder="**/*.{html,css,js}" />
+                </label>
+
+                <label>
+                  Print width
+                  <span class="help" data-tip="Maks linjelengde før linjer brytes av Prettier. Standard 80.">ⓘ</span>
+                  <input id="fmt_prettier_printWidth" type="number" min="40" max="240" placeholder="80" />
+                </label>
+
+                <label>
+                  Tab width
+                  <span class="help" data-tip="Antall spaces per tab. Standard 2 (JS) eller 4.">ⓘ</span>
+                  <input id="fmt_prettier_tabWidth" type="number" min="2" max="8" placeholder="2" />
+                </label>
+
+                <label class="inline">
+                  <input type="checkbox" id="fmt_prettier_singleQuote" />
+                  Single quotes
+                  <span class="help" data-tip="Foretrekk 'single quotes' der det er mulig.">ⓘ</span>
+                </label>
+
+                <label class="inline">
+                  <input type="checkbox" id="fmt_prettier_semi" />
+                  Semikolon
+                  <span class="help" data-tip="Sett semikolon på slutten av statements.">ⓘ</span>
+                </label>
+
+                <label>
+                  Trailing comma
+                  <span
+                    class="help"
+                    data-tip="Hvor Prettier tillater trailing comma. Vanlig: es5 (objekter/arrays). all (også funksjoner der det støttes)."
+                    >ⓘ</span
+                  >
+                  <select id="fmt_prettier_trailingComma">
+                    <option value="">(standard)</option>
+                    <option value="none">none</option>
+                    <option value="es5">es5</option>
+                    <option value="all">all</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <!-- PYTHON -->
+            <div class="fmt-pane" data-fmt-pane="python">
+              <div class="group">
+                <div class="group-title">Black</div>
+                <div class="grid two">
+                  <label class="inline">
+                    <input type="checkbox" id="fmt_black_enable" />
+                    Aktiver Black
+                    <span class="help" data-tip="Kjør Black på oppgitte paths (typisk ./).">ⓘ</span>
+                  </label>
+
+                  <label>
+                    Paths
+                    <span class="help" data-tip="Mapp(er) eller filer å kjøre Black på. Relativt til prosjektrot.">ⓘ</span>
+                    <input id="fmt_black_paths" type="text" placeholder="./" />
+                  </label>
+
+                  <label>
+                    Line length
+                    <span class="help" data-tip="Maks linjelengde Black formaterer etter (standard 88).">ⓘ</span>
+                    <input id="fmt_black_line_length" type="number" min="60" max="240" placeholder="88" />
+                  </label>
+
+                  <label>
+                    Target versjoner
+                    <span class="help" data-tip="Python-mål for Black. Eksempel: py311,py312. Tomt = Black bestemmer.">ⓘ</span>
+                    <input id="fmt_black_target" type="text" placeholder="py311,py312" />
+                  </label>
+                </div>
+              </div>
+
+              <div class="group" style="margin-top: 12px">
+                <div class="group-title">Ruff</div>
+                <div class="grid two">
+                  <label class="inline">
+                    <input type="checkbox" id="fmt_ruff_enable" />
+                    Aktiver Ruff
+                    <span class="help" data-tip="Lint og autofix med Ruff.">ⓘ</span>
+                  </label>
+
+                  <label class="inline">
+                    <input type="checkbox" id="fmt_ruff_fix" checked />
+                    Autofix
+                    <span class="help" data-tip="Prøv å rette problemer automatisk.">ⓘ</span>
+                  </label>
+
+                  <label class="inline">
+                    <input type="checkbox" id="fmt_ruff_unsafe" />
+                    Unsafe fixes
+                    <span class="help" data-tip="Tillat mer aggressive/ikke-tapsfrie endringer. Bruk med forsiktighet.">ⓘ</span>
+                  </label>
+
+                  <label class="inline">
+                    <input type="checkbox" id="fmt_ruff_preview" />
+                    Preview regler
+                    <span class="help" data-tip="Aktiver forhåndsviste regler i Ruff (kan endre seg).">ⓘ</span>
+                  </label>
+
+                  <label>
+                    Select (koder)
+                    <span class="help" data-tip="Eksempel: E,F,I,UP. Hvilke regelkategorier aktiveres.">ⓘ</span>
+                    <input id="fmt_ruff_select" type="text" placeholder="E,F,I,UP" />
+                  </label>
+
+                  <label>
+                    Ignore (koder)
+                    <span class="help" data-tip="Eksempel: E501. Hvilke regler ignoreres.">ⓘ</span>
+                    <input id="fmt_ruff_ignore" type="text" placeholder="E501" />
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- CLEANUP -->
+            <div class="fmt-pane" data-fmt-pane="cleanup">
+              <div class="grid two">
+                <label class="inline">
+                  <input type="checkbox" id="fmt_cleanup_enable" />
+                  Aktiver Cleanup
+                  <span class="help" data-tip="Trim whitespace, normaliser linjeslutt, begrens tomlinjer, gjør blokker mer kompakte."
+                    >ⓘ</span
+                  >
+                </label>
+
+                <label class="inline">
+                  <input type="checkbox" id="fmt_cleanup_compact" checked />
+                  Kompakte blokker
+                  <span class="help" data-tip="Fjern overflødige tomlinjer etter blokker/foran else/except, osv.">ⓘ</span>
+                </label>
+
+                <label>
+                  Maks tomlinjer på rad
+                  <span class="help" data-tip="Antall sammenhengende blanke linjer som får stå (0–3 anbefalt).">ⓘ</span>
+                  <input id="fmt_cleanup_maxblank" type="number" min="0" max="10" placeholder="1" />
+                </label>
+
+                <label>
+                  Inkluder endelser
+                  <span class="help" data-tip="Hvilke filtyper Cleanup skal gjelde for. Eksempel: .py,.js,.ts,.css,.html,.json,.sh">ⓘ</span>
+                  <input id="fmt_cleanup_exts" type="text" placeholder=".py,.js,.ts,.css,.html,.json,.sh" />
+                </label>
+
+                <label>
+                  Ekskluder endelser
+                  <span class="help" data-tip="Filendelser som alltid hoppes over av Cleanup. Eksempel: .md">ⓘ</span>
+                  <input id="fmt_cleanup_excl_exts" type="text" placeholder=".md" />
+                </label>
+              </div>
+            </div>
+
+            <textarea id="out_format" readonly></textarea>
+            <p class="muted">
+              Formattere: Prettier (JS/TS/HTML/CSS/…), Black (Python), Ruff (lint/autofix), Cleanup (whitespace/block trim).
+            </p>
+
+            <div class="group" style="margin-top: 10px">
+              <div class="group-title">Forhåndsvisning (kun valgt fil)</div>
+              <textarea
+                id="fmt_preview_out"
+                readonly
+                style="min-height: 220px"
+                placeholder="Kjør 'Forhåndsvis diff' for å se endringer på en fil."
+              ></textarea>
+            </div>
+          </div>
+        </section>
+
+        <!-- CLEAN -->
+        <section class="card tool tool-clean" data-tool="clean">
+          <div class="tool-header">
+            <div class="tool-title">Clean <span class="lamp" id="status_clean"></span></div>
+            <div class="tool-actions">
+              <button class="btn" id="save_clean_targets">Lagre targets</button> <button class="btn" id="run_clean">Kjør clean</button>
+            </div>
+          </div>
+          <div class="tool-body">
+            <label>Modus</label>
+            <div class="inline" role="radiogroup" aria-label="Modus">
+              <label><input type="radio" name="clean_mode" id="clean_mode_dry" value="dry" checked /> Dry-run (standard)</label>
+              <label><input type="radio" name="clean_mode" id="clean_mode_apply" value="apply" /> Utfør sletting</label>
+            </div>
+            <div
+              id="clean_warning"
+              class="muted"
+              style="display: none; border: 1px solid #803; background: #2a0d12; padding: 8px; border-radius: 8px"
+            >
+              ⚠ Dette vil <b>slette filer</b>. Dobbeltsjekk mål og bruk evt. dry-run først.
+            </div>
+            <div style="margin-top: 8px">
+              <label>Mål (fra <code>clean.targets</code>)</label>
+              <div id="clean_targets" class="grid"></div>
+            </div>
+            <label>Begrens til mål (komma-separert)</label> <input id="clean_what" type="text" placeholder="pycache,ruff_cache" />
+            <label>Skip mål (komma-separert)</label> <input id="clean_skip" type="text" placeholder="node_modules" />
+            <textarea id="out_clean" readonly></textarea>
+          </div>
+        </section>
+
+        <!-- GH RAW -->
+        <section class="card tool tool-gh" data-tool="gh-raw">
+          <div class="tool-header">
+            <div class="tool-title">GH Raw <span class="lamp" id="status_gh"></span></div>
+            <div class="tool-actions">
+              <button class="btn" id="run_gh">List raw-URLer</button>
+            </div>
+          </div>
+          <div class="tool-body">
+            <label>Path prefix</label>
+            <input id="gh_prefix" type="text" placeholder="app/routes" />
+            <textarea id="out_gh" readonly></textarea>
+          </div>
+        </section>
+        <!-- BACKUP -->
+        <section class="card tool tool-backup" data-tool="backup">
+          <div class="tool-header">
+            <div class="tool-title">Backup <span class="lamp" id="status_backup"></span></div>
+            <div class="tool-actions">
+              <button class="btn" id="run_backup">Kjør backup</button>
+              <button class="btn" id="run_backup_env">Env-sjekk</button>
+            </div>
+          </div>
+          <div class="tool-body">
+            <div id="bk_info" class="muted"></div>
+            <label>Config (valgfri)</label>
+            <input id="bk_config" type="text" placeholder="~/backup.json eller ~/tools/configs/backup_profiles.json" />
+            <label>Profil (fra backup_profiles.json)</label>
+            <select id="bk_profile_select"></select>
+            <div class="inline">
+              <label>Project <input id="bk_project" type="text" placeholder="prosjektnavn" /></label>
+              <label>Version <input id="bk_version" type="text" placeholder="1.10" /></label>
+              <label>Tag <input id="bk_tag" type="text" placeholder="Frontend_OK" /></label>
+            </div>
+            <div class="inline">
+              <label>Source <input id="bk_source" type="text" placeholder="countdown (→ ~/countdown)" /></label>
+              <label>Dest <input id="bk_dest" type="text" placeholder="Backups (→ ~/Backups)" /></label>
+            </div>
+            <div class="inline">
+              <label
+                >Format
+                <select id="bk_format">
+                  <option value="">default (zip)</option>
+                  <option value="zip">zip</option>
+                  <option value="tar.gz">tar.gz</option>
+                  <option value="tgz">tgz</option>
+                </select>
+              </label>
+              <label><input type="checkbox" id="bk_hidden" /> Inkluder skjulte</label>
+              <label><input type="checkbox" id="bk_list" /> List filer (ingen skriving)</label>
+              <label><input type="checkbox" id="bk_dry" /> Dry-run</label>
+              <label><input type="checkbox" id="bk_nover" /> Uten versjon</label>
+              <label><input type="checkbox" id="bk_noverif" /> Ikke verifiser</label>
+            </div>
+            <label>Exclude (ett mønster per linje eller kommaseparert)</label>
+            <textarea id="bk_exclude" placeholder="*.env&#10;*.sqlite"></textarea>
+            <div class="inline">
+              <label>Keep <input id="bk_keep" type="number" min="0" value="0" /></label>
+              <label>Dropbox path <input id="bk_dbx_path" type="text" placeholder="/Apps/backup_app/countdown" /></label>
+              <label
+                >Mode
+                <select id="bk_dbx_mode">
+                  <option value="">default (add)</option>
+                  <option value="add">add</option>
+                  <option value="overwrite">overwrite</option>
+                </select>
+              </label>
+            </div>
+            <textarea id="out_backup" readonly></textarea>
+            <p class="muted">
+              Profiler leses fra
+              <code>tools/configs/backup_profiles.json</code>. Script-sti i <code>tools/configs/backup_config.json</code> kan være relativ
+              til <code>~/tools</code>.
+            </p>
+          </div>
+        </section>
+        <!-- SETTINGS -->
+        <section class="card tool tool-settings" data-tool="settings">
+          <div class="tool-header">
+            <div class="tool-title">Settings <span class="lamp" id="status_settings"></span></div>
+            <div class="tool-actions">
+              <button class="btn" id="cfg_reload">Reload</button>
+              <button class="btn" id="cfg_format">Format</button>
+              <button class="btn" id="cfg_save">Lagre</button>
+            </div>
+          </div>
+          <div class="tool-body">
+            <div class="inline">
+              <label for="set_default_project" style="min-width: 180px">Default project</label>
+              <select id="set_default_project"></select>
+            </div>
+            <div class="inline" style="margin-top: 8px">
+              <label for="set_default_tool" style="min-width: 180px">Default tool</label>
+              <select id="set_default_tool">
+                <option value="">(ingen)</option>
+                <option value="search">search</option>
+                <option value="paste">paste</option>
+                <option value="format">format</option>
+                <option value="clean">clean</option>
+                <option value="gh-raw">gh-raw</option>
+                <option value="backup">backup</option>
+              </select>
+            </div>
+            <div class="inline" style="margin-top: 8px">
+              <label for="set_backup_script" style="min-width: 180px">backup.py (sti)</label>
+              <input id="set_backup_script" type="text" placeholder="/home/<bruker>/tools/backup_app/backup.py" />
+            </div>
+            <hr style="border: none; border-top: 1px solid var(--border); margin: 14px 0" />
+            <div class="inline" style="gap: 8px">
+              <label for="cfg_file" style="min-width: 180px">Config-fil</label>
+              <select id="cfg_file" style="min-width: 280px"></select>
+              <span class="muted" id="cfg_path"></span>
+            </div>
+            <label for="cfg_editor">Innhold (JSON)</label>
+            <textarea id="cfg_editor" style="min-height: 360px"></textarea>
+            <p class="muted" style="margin-top: 6px">
+              Endringer lagres direkte til fil i <code>configs/</code> og påvirker også CLI. — CONFIG_DIR:
+              <code id="settings_cfgdir"></code> ·
+              <a href="#" id="settings_diag">diagnose</a>
+            </p>
+            <textarea id="out_settings" readonly></textarea>
+          </div>
+        </section>
+      </div>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

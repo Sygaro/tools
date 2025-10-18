@@ -1,3 +1,13 @@
 {
-  "search_terms": ["\\bTODO\\b", "\\bFIXME\\b"]
+  "search_terms": ["\\bTODO\\b", "\\bFIXME\\b"],
+  "include_extensions": [".py", ".js", ".ts", ".json", ".md"],
+  "exclude_dirs": [".git", "venv", "node_modules", "__pycache__"],
+  "exclude_files": [],
+  "case_insensitive": true,
+  "ui_defaults": {
+    "files_only": false,
+    "path_mode": "relative",
+    "limit_dirs": [],
+    "limit_exts": []
+  }
 }

@@ -8,15 +8,16 @@
       "ds_store": true,
       "editor": true,
       "mypy_cache": true,
-      "node_modules": false,
+      "node_modules": true,
       "pycache": true,
       "pytest_cache": true,
-      "ruff_cache": false,
-      "thumbs_db": false
+      "ruff_cache": true,
+      "thumbs_db": true
     },
-    "extra_globs": [
-      "._.DS_Store"
-    ],
-    "skip_globs": []
+    "extra_globs": [],
+    "skip_globs": [],
+    "honor_global_excludes": false,
+    "exclude_dirs": [],
+    "exclude_files": []
   }
 }

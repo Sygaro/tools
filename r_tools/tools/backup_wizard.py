@@ -1,16 +1,19 @@
-# /home/reidar/tools/r_tools/tools/backup_wizard.py
+# ./tools/r_tools/tools/backup_wizard.py
 from __future__ import annotations
+
 import os
 import stat
 from pathlib import Path
-from typing import Dict, Optional
+
 def _tools_root() -> Path:
     return Path(__file__).resolve().parents[2]
+
 def _env_path() -> Path:
     # Lagre på repo-roten (tools/.env)
     return _tools_root() / ".env"
-def _load_existing_env(path: Path) -> Dict[str, str]:
-    out: Dict[str, str] = {}
+
+def _load_existing_env(path: Path) -> dict[str, str]:
+    out: dict[str, str] = {}
     if not path.is_file():
         return out
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -20,7 +23,8 @@ def _load_existing_env(path: Path) -> Dict[str, str]:
         k, v = line.split("=", 1)
         out[k.strip()] = v.strip()
     return out
-def _write_env(path: Path, kv: Dict[str, str]) -> None:
+
+def _write_env(path: Path, kv: dict[str, str]) -> None:
     # Slå sammen med eksisterende, oppdater kun aktuelle
     existing = _load_existing_env(path)
     existing.update(kv)
@@ -30,7 +34,8 @@ def _write_env(path: Path, kv: Dict[str, str]) -> None:
         path.chmod(stat.S_IRUSR | stat.S_IWUSR)  # 0o600
     except Exception:
         pass
-def _prompt(label: str, default: Optional[str] = None, secret: bool = False) -> str:
+
+def _prompt(label: str, default: str | None = None, secret: bool = False) -> str:
     try:
         import getpass
     except Exception:
@@ -40,7 +45,8 @@ def _prompt(label: str, default: Optional[str] = None, secret: bool = False) -> 
     else:
         val = input(f"{label}{' ['+default+']' if default else ''}: ").strip()
     return val or (default or "")
-def run_backup_wizard(env_out: Optional[Path] = None) -> int:
+
+def run_backup_wizard(env_out: Path | None = None) -> int:
     """
     Interaktiv Dropbox-oppsett for refresh token.
     Skriver .env med: DROPBOX_APP_KEY, DROPBOX_APP_SECRET, DROPBOX_REFRESH_TOKEN.
@@ -84,9 +90,7 @@ def run_backup_wizard(env_out: Optional[Path] = None) -> int:
         return 3
     refresh_token = getattr(result, "refresh_token", None)
     if not refresh_token:
-        print(
-            "Mottok ikke refresh token. Sjekk at appen er Scoped og token_access_type=offline."
-        )
+        print("Mottok ikke refresh token. Sjekk at appen er Scoped og token_access_type=offline.")
         return 3
     out_path = env_out or _env_path()
     _write_env(

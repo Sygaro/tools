@@ -1,11 +1,12 @@
-# /home/reidar/tools/r_tools/tools/diag_dropbox.py
+# ./tools/r_tools/tools/diag_dropbox.py
 from __future__ import annotations
+
 import os
 from pathlib import Path
-from typing import Dict, Tuple
-def _robust_env() -> Dict[str, bool]:
+
+def _robust_env() -> dict[str, bool]:
     try:
-        from dotenv import load_dotenv, dotenv_values  # type: ignore
+        from dotenv import dotenv_values, load_dotenv  # type: ignore
     except Exception:
         load_dotenv = None
         dotenv_values = None
@@ -24,7 +25,8 @@ def _robust_env() -> Dict[str, bool]:
                         os.environ.setdefault(k, v)
     keys = ("DROPBOX_APP_KEY", "DROPBOX_APP_SECRET", "DROPBOX_REFRESH_TOKEN")
     return {k: bool(os.getenv(k)) for k in keys}
-def diag_dropbox() -> Tuple[int, str]:
+
+def diag_dropbox() -> tuple[int, str]:
     have = _robust_env()
     out = []
     out.append("== Dropbox diag ==")
@@ -34,15 +36,14 @@ def diag_dropbox() -> Tuple[int, str]:
     # ⚠️ marker hvis backup_app/.env finnes
     backup_env = Path(__file__).resolve().parents[1] / "backup_app" / ".env"
     if backup_env.is_file():
-        out.append(
-            f"⚠️ Fant {backup_env} – anbefales å slette/ignorere (bruk tools/.env)"
-        )
+        out.append(f"⚠️ Fant {backup_env} – anbefales å slette/ignorere (bruk tools/.env)")
     missing = [k for k, v in have.items() if not v]
     if missing:
         out.append("Mangler nøkler: " + ", ".join(missing))
         return 2, "\n".join(out) + "\n"
     try:
         from dropbox import Dropbox  # type: ignore
+
         dbx = Dropbox(
             oauth2_refresh_token=os.environ["DROPBOX_REFRESH_TOKEN"],
             app_key=os.environ["DROPBOX_APP_KEY"],

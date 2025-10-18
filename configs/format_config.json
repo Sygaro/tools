@@ -1,15 +1,37 @@
 {
   "format": {
-    "prettier": { "enable": true, "globs": ["**/*.{html,css,js}"] },
-    "black":    { "enable": true, "paths": ["./"] },
-    "ruff":     { "enable": true, "args": ["check", "./", "--fix"] },
+    "allow_home": false,
+    "prettier": {
+      "enable": true,
+      "globs": ["**/*.{html,css,js,ts,tsx,json,yml,yaml,md}"],
+      "ignore": ["!**/node_modules/**", "!**/dist/**", "!**/._*", "!**/.DS_Store"],
+      "printWidth": 140,
+      "tabWidth": 2,
+      "singleQuote": true,
+      "semi": true,
+      "trailingComma": "es5"
+    },
+    "black": {
+      "enable": true,
+      "paths": ["./"],
+      "line_length": 140,
+      "target": "py311"
+    },
+    "ruff": {
+      "enable": true,
+      "fix": true,
+      "unsafe_fixes": false,
+      "preview": false,
+      "select": "E,F,I,UP",
+      "ignore": "E501"
+    },
     "cleanup": {
       "enable": true,
       "paths": [],
       "exts": [".py", ".js", ".ts", ".css", ".html", ".json", ".sh"],
-      "exclude_exts": [".md","venv/"],
+      "exclude_exts": [".md"],
       "compact_blocks": true,
-      "max_consecutive_blanks": 0
+      "max_consecutive_blanks": 1
     }
   }
 }

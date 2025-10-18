@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Fleksibel backup-CLI med JSON-profiler.
 - SOURCE/DEST tolkes relativt til HOME hvis de ikke er absolutte.
@@ -10,26 +9,32 @@ Fleksibel backup-CLI med JSON-profiler.
 - --list: skriv hvilke filer som blir med (ingen skriving).
 """
 import argparse
+import fnmatch
+import json
+import logging
 import os
 import sys
-import fnmatch
-import logging
-import json
+from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable, List, Optional, Set, Dict, Any
+from typing import Any
+
 from uploader_dropbox import upload_to_dropbox  # type: ignore
+
 try:
     from dotenv import load_dotenv  # type: ignore
 except Exception:
     load_dotenv = None
+
 def _lazy_import_dropbox():
     import uploader_dropbox  # noqa: F401
+
     return uploader_dropbox
+
 LOG = logging.getLogger("backup")
 DEFAULT_DEST = str(Path.home() / "Backups")  # <-- stor B
 IGNORE_FILE = ".backupignore"
-EXCLUDE_DIRNAMES: Set[str] = {
+EXCLUDE_DIRNAMES: set[str] = {
     "venv",
     ".venv",
     ".git",
@@ -40,22 +45,24 @@ EXCLUDE_DIRNAMES: Set[str] = {
     "backups",
     "Backups",
 }
-EXCLUDE_FILEPATTERNS: List[str] = ["*.pyc", "*.pyo", "*.log", "*.tmp"]
+EXCLUDE_FILEPATTERNS: list[str] = ["*.pyc", "*.pyo", "*.log", "*.tmp"]
+
 # ---------- Utils
 def setup_logging(verbose: bool):
     level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S"
-    )
+    logging.basicConfig(level=level, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
+
 def expand_vars_home(s: str) -> str:
     return os.path.expanduser(os.path.expandvars(s))
+
 def resolve_from_home(path_arg: str) -> Path:
     p = Path(expand_vars_home(path_arg))
     if p.is_absolute():
         return p.resolve()
     return (Path.home() / p).resolve()
-def read_ignore_file(src: Path) -> List[str]:
-    patterns: List[str] = []
+
+def read_ignore_file(src: Path) -> list[str]:
+    patterns: list[str] = []
     f = src / IGNORE_FILE
     if f.exists():
         for line in f.read_text(encoding="utf-8").splitlines():
@@ -64,14 +71,14 @@ def read_ignore_file(src: Path) -> List[str]:
                 continue
             patterns.append(line)
     return patterns
+
 def matched_any(path_rel: str, patterns: Iterable[str]) -> bool:
     for p in patterns:
         if fnmatch.fnmatch(path_rel, p):
             return True
     return False
-def iter_files(
-    src: Path, exclude_patterns: Iterable[str], include_hidden: bool
-) -> Iterable[Path]:
+
+def iter_files(src: Path, exclude_patterns: Iterable[str], include_hidden: bool) -> Iterable[Path]:
     for p in src.rglob("*"):
         if p.is_dir():
             continue
@@ -86,8 +93,9 @@ def iter_files(
         if matched_any(rel_posix, exclude_patterns):
             continue
         yield p
+
 # ---------- JSON config
-def find_default_config() -> Optional[Path]:
+def find_default_config() -> Path | None:
     """
     Finn standard konfig-fil når --config ikke er oppgitt.
     Prioritet:
@@ -125,7 +133,8 @@ def find_default_config() -> Optional[Path]:
         if c.is_file():
             return c.resolve()
     return None
-def load_json_config(path: Path) -> Dict[str, Any]:
+
+def load_json_config(path: Path) -> dict[str, Any]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
@@ -133,7 +142,8 @@ def load_json_config(path: Path) -> Dict[str, Any]:
         return data
     except Exception as e:
         raise SystemExit(f"Kunne ikke lese config {path}: {e}")
-def select_profile(config: Dict[str, Any], profile: Optional[str]) -> Dict[str, Any]:
+
+def select_profile(config: dict[str, Any], profile: str | None) -> dict[str, Any]:
     # To formater støttes:
     # 1) Flat: { "project": "...", "source": "...", ... }
     # 2) profiler: { "profiles": {"navn": {...}, "annet": {...}}, "default": "navn" }
@@ -150,14 +160,13 @@ def select_profile(config: Dict[str, Any], profile: Optional[str]) -> Dict[str, 
                 base = list(profiles.values())[0]
             else:
                 names = ", ".join(sorted(profiles.keys()))
-                raise SystemExit(
-                    f"Config inneholder flere profiler ({names}). Oppgi --profile."
-                )
+                raise SystemExit(f"Config inneholder flere profiler ({names}). Oppgi --profile.")
         assert isinstance(base, dict), "Profil må være et objekt"
         return base
     # Flat config
     return config
-def coerce_types(d: Dict[str, Any]) -> Dict[str, Any]:
+
+def coerce_types(d: dict[str, Any]) -> dict[str, Any]:
     out = dict(d)
     # Normaliser typer
     if "keep" in out:
@@ -189,13 +198,14 @@ def coerce_types(d: Dict[str, Any]) -> Dict[str, Any]:
         if key in out and isinstance(out[key], str):
             out[key] = expand_vars_home(out[key])
     return out
+
 # ---------- Archiving & layout
 def make_archive(
     src: Path,
     dest_root: Path,
     project: str,
-    version: Optional[str],
-    tag: Optional[str],
+    version: str | None,
+    tag: str | None,
     fmt: str,
     exclude_patterns: Iterable[str],
     include_hidden: bool,
@@ -227,40 +237,42 @@ def make_archive(
         return out
     if fmt == "zip":
         import zipfile
+
         with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED) as zf:
             for f in iter_files(src, exclude_patterns, include_hidden):
                 zf.write(f, f.relative_to(src).as_posix())
     else:
         import tarfile
+
         with tarfile.open(out, "w:gz") as tf:
             for f in iter_files(src, exclude_patterns, include_hidden):
                 tf.add(f, f.relative_to(src).as_posix())
     return out
+
 def verify_archive(archive_path: Path) -> None:
     if archive_path.suffix == ".zip":
         import zipfile
+
         with zipfile.ZipFile(archive_path, "r") as zf:
             _ = zf.namelist()
     elif archive_path.suffixes[-2:] == [".tar", ".gz"] or archive_path.suffix == ".tgz":
         import tarfile
+
         with tarfile.open(archive_path, "r:gz") as tf:
             _ = tf.getmembers()
     else:
         LOG.warning("Ukjent arkivtype for verifisering: %s", archive_path)
+
 def apply_retention(project_dir: Path, project: str, keep: int) -> None:
     if keep <= 0:
         return
-    candidates: List[Path] = []
+    candidates: list[Path] = []
     for p in project_dir.rglob("*"):
         if p.is_file():
             name = p.name
             if not name.startswith(f"{project}_"):
                 continue
-            if (
-                p.suffix == ".zip"
-                or p.suffix == ".tgz"
-                or p.suffixes[-2:] == [".tar", ".gz"]
-            ):
+            if p.suffix == ".zip" or p.suffix == ".tgz" or p.suffixes[-2:] == [".tar", ".gz"]:
                 candidates.append(p)
     candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     to_delete = candidates[keep:]
@@ -270,6 +282,7 @@ def apply_retention(project_dir: Path, project: str, keep: int) -> None:
             p.unlink(missing_ok=True)
         except Exception as e:
             LOG.warning("Klarte ikke slette %s: %s", p, e)
+
 def create_latest_symlink(project_dir: Path, archive_path: Path, project: str) -> None:
     link = project_dir / f"{project}_latest"
     if link.exists() or link.is_symlink():
@@ -281,26 +294,19 @@ def create_latest_symlink(project_dir: Path, archive_path: Path, project: str) -
         link.symlink_to(archive_path.resolve())
     except Exception as e:
         LOG.debug("Kunne ikke lage symlink (OK på f.eks. Dropbox/FAT): %s", e)
+
 # ---------- Arg parsing (two-stage: pre-parse config/profile, then full)
-def build_full_parser(defaults: Dict[str, Any]) -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(
-        description="Fleksibel prosjekt-backup med JSON-profiler og valgfri Dropbox."
-    )
+def build_full_parser(defaults: dict[str, Any]) -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(description="Fleksibel prosjekt-backup med JSON-profiler og valgfri Dropbox.")
     p.set_defaults(**defaults)
     p.add_argument("--project", "-p", help="Prosjektnavn (default: navn på kildemappe)")
     p.add_argument("--source", "-s", help="Kildemappe (relativ = fra HOME)")
-    p.add_argument(
-        "--dest", "-d", help=f"Målmappe (relativ = fra HOME) (default: {DEFAULT_DEST})"
-    )
+    p.add_argument("--dest", "-d", help=f"Målmappe (relativ = fra HOME) (default: {DEFAULT_DEST})")
     p.add_argument("--version", "-V", help="Versjonsnummer, f.eks. 1.06 (valgfritt)")
-    p.add_argument(
-        "--no-version", action="store_true", help="Tving uten versjon i filnavn"
-    )
+    p.add_argument("--no-version", action="store_true", help="Tving uten versjon i filnavn")
     p.add_argument("--tag", "-t", help="Ekstra tag i filnavn, f.eks. Frontend_OK")
     p.add_argument("--format", choices=["zip", "tar.gz", "tgz"], help="Arkivformat")
-    p.add_argument(
-        "--include-hidden", action="store_true", help="Ta med skjulte filer/mapper"
-    )
+    p.add_argument("--include-hidden", action="store_true", help="Ta med skjulte filer/mapper")
     p.add_argument(
         "--exclude",
         action="append",
@@ -308,9 +314,7 @@ def build_full_parser(defaults: Dict[str, Any]) -> argparse.ArgumentParser:
         help="Glob-mønster for ekskludering (kan gjentas). Eksempel: --exclude '.env'",
     )
     p.add_argument("--dropbox-path", help="Sti i Dropbox for opplasting")
-    p.add_argument(
-        "--dropbox-mode", choices=["add", "overwrite"], help="Dropbox skrivemodus"
-    )
+    p.add_argument("--dropbox-mode", choices=["add", "overwrite"], help="Dropbox skrivemodus")
     p.add_argument(
         "--keep",
         type=int,
@@ -326,35 +330,29 @@ def build_full_parser(defaults: Dict[str, Any]) -> argparse.ArgumentParser:
         action="store_true",
         help="Vis hva som ville skjedd, uten å skrive filer",
     )
-    p.add_argument(
-        "--no-verify", action="store_true", help="Ikke verifiser arkivet etter skriving"
-    )
+    p.add_argument("--no-verify", action="store_true", help="Ikke verifiser arkivet etter skriving")
     p.add_argument("--verbose", "-v", action="store_true", help="Mer logging")
     # Pre-parsed options (still accepted to show in --help)
     p.add_argument("--config", help="Sti til JSON-konfig (backup.json).")
     p.add_argument("--profile", help="Profilnavn i config.")
     return p
-def main(argv: Optional[List[str]] = None) -> int:
+
+def main(argv: list[str] | None = None) -> int:
     # --- .env loading (robust) ---
     if load_dotenv:
         from dotenv import dotenv_values
+
         # 1) Prøv standard (CWD) først – ingen skade om den ikke finnes
         try:
             load_dotenv()
         except Exception:
             pass
         # 2) Last eksplisitt fra tools/.env (repo-rot), så backup_app/.env, så $HOME/.env
-        _TOOLS_ENV = (
-            Path(__file__).resolve().parents[1] / ".env"
-        )  # /home/reidar/tools/.env
-        _BACKUP_ENV = (
-            Path(__file__).resolve().parent / ".env"
-        )  # /home/reidar/tools/backup_app/.env
+        _TOOLS_ENV = Path(__file__).resolve().parents[1] / ".env"  # ./tools/.env
+        _BACKUP_ENV = Path(__file__).resolve().parent / ".env"  # ./tools/backup_app/.env
         _HOME_ENV = Path.home() / ".env"
         if _BACKUP_ENV.is_file():
-            LOG.warning(
-                "Ignorerer backup_app/.env – bruk tools/.env for Dropbox-nøkler."
-            )
+            LOG.warning("Ignorerer backup_app/.env – bruk tools/.env for Dropbox-nøkler.")
         for _p in (_TOOLS_ENV, _BACKUP_ENV, _HOME_ENV):
             if _p.is_file():
                 # Sikre at verdiene kommer inn i os.environ uten å overskrive allerede satte
@@ -381,7 +379,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     pre_args, remaining = pre.parse_known_args(argv)
     setup_logging(pre_args.verbose)
     # Last konfig (hvis angitt eller via auto-oppslag)
-    defaults: Dict[str, Any] = {
+    defaults: dict[str, Any] = {
         "dest": DEFAULT_DEST,
         "format": "zip",
         "include_hidden": False,
@@ -392,7 +390,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "no_verify": False,
         "verbose": pre_args.verbose,
     }
-    cfg_path: Optional[Path] = None
+    cfg_path: Path | None = None
     if pre_args.config:
         cfg_path = resolve_from_home(pre_args.config)
         LOG.debug("Bruker config: %s", cfg_path)
@@ -423,7 +421,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     version = args.version
     if args.no_version:
         version = None
-    exclude_patterns: List[str] = read_ignore_file(src)
+    exclude_patterns: list[str] = read_ignore_file(src)
     # NB: args.exclude kan være None eller liste; legg til
     if args.exclude:
         exclude_patterns.extend(args.exclude)
@@ -472,9 +470,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     # Dropbox (fra config/CLI) – refresh-token only
     if args.dropbox_path:
         try:
-            LOG.info(
-                "Laster opp til Dropbox: %s -> %s", archive_path.name, args.dropbox_path
-            )
+            LOG.info("Laster opp til Dropbox: %s -> %s", archive_path.name, args.dropbox_path)
             if not args.dry_run:
                 upload_to_dropbox(
                     local_path=archive_path,
@@ -486,5 +482,6 @@ def main(argv: Optional[List[str]] = None) -> int:
             return 3
     LOG.info("Ferdig.")
     return 0
+
 if __name__ == "__main__":
     sys.exit(main())

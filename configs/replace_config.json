@@ -1,0 +1,32 @@
+{
+  "replace": {
+    "include": [
+      "**/*.py",
+      "**/*.js",
+      "**/*.ts",
+      "**/*.tsx",
+      "**/*.css",
+      "**/*.scss",
+      "**/*.html",
+      "**/*.json",
+      "**/*.md",
+      "**/*.txt",
+      "**/*.sh",
+      "**/*.yml",
+      "**/*.yaml",
+      "**/*.toml",
+      "**/*.ini",
+      "**/*.cfg",
+      "**/*.c",
+      "**/*.h",
+      "**/*.cpp"
+    ],
+    "exclude": [],
+    "max_size": 2000000,
+    "regex": true,
+    "case_sensitive": false,
+    "backup": true,
+    "dry_run": true,
+    "show_diff": false
+  }
+}

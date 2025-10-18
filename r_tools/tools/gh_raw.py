@@ -1,11 +1,13 @@
-# /home/reidar/tools/r_tools/tools/gh_raw.py
+# ./tools/r_tools/tools/gh_raw.py
 from __future__ import annotations
+
 import json
 import os
-from typing import Any, Dict, List
+from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
-def _fetch_tree(user: str, repo: str, branch: str, token: str | None) -> Dict[str, Any]:
+
+def _fetch_tree(user: str, repo: str, branch: str, token: str | None) -> dict[str, Any]:
     """
     Hent Git tree for gitt branch. Bruker GitHub API v3.
     - token (valgfri): bruk GITHUB_TOKEN for private repo/høyere rate-limit.
@@ -21,14 +23,12 @@ def _fetch_tree(user: str, repo: str, branch: str, token: str | None) -> Dict[st
     except HTTPError as e:
         msg = f"HTTP {e.code} for {url}. "
         if e.code == 404:
-            msg += (
-                "Sjekk at user/repo/branch stemmer, og at branchen eksisterer. "
-                "Er repo privat? Sett GITHUB_TOKEN i miljøet."
-            )
+            msg += "Sjekk at user/repo/branch stemmer, og at branchen eksisterer. " "Er repo privat? Sett GITHUB_TOKEN i miljøet."
         raise RuntimeError(msg) from e
     except URLError as e:
         raise RuntimeError(f"Nettverksfeil mot {url}: {e.reason}") from e
-def run_gh_raw(cfg: Dict, as_json: bool = False) -> None:
+
+def run_gh_raw(cfg: dict, as_json: bool = False) -> None:
     """
     Les 'gh_raw' fra cfg og skriv raw.githubusercontent-URLer for alle blobs i treet.
     Respekterer evt. path_prefix for å begrense output.
@@ -43,12 +43,12 @@ def run_gh_raw(cfg: Dict, as_json: bool = False) -> None:
         print("gh_raw: mangler 'user' eller 'repo' i config.")
         return
     tree = _fetch_tree(user, repo, branch, token)
-    nodes: List[Dict[str, Any]] = list(tree.get("tree", []))
+    nodes: list[dict[str, Any]] = list(tree.get("tree", []))
     if not nodes:
         print("gh_raw: tomt tre eller mangler 'tree' i responsen.")
         return
     base = f"https://raw.githubusercontent.com/{user}/{repo}/{branch}/"
-    out: List[str] = []
+    out: list[str] = []
     for node in nodes:
         if node.get("type") != "blob":
             continue
@@ -60,6 +60,8 @@ def run_gh_raw(cfg: Dict, as_json: bool = False) -> None:
             out.append(base + p)
     if as_json:
         print(json.dumps(out, indent=2))
+    if tree.get("truncated"):
+        print("⚠ gh_raw: Result list is truncated by GitHub API; output may be incomplete.")
     else:
         for u in out:
             print(u)

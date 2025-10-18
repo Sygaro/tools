@@ -60,6 +60,7 @@ sudo ./scripts/setup_tools.sh
 > Scriptet må kjøres med `sudo` slik at det trygt kan opprette system-tjenester. Det sørger samtidig for at filer/mapper eies av din bruker etterpå.
 
 Når scriptet er ferdig:
+
 - åpne en ny terminal (for at `PATH` og env skal ta effekt)
 - test: `which rt && rt --help`
 
@@ -93,19 +94,21 @@ echo "export RTOOLS_CONFIG_DIR=\"$PWD/configs\"" >> ~/.bashrc
 
 ## Starte UI/CLI
 
-- CLI:  
+- CLI:
+
   ```bash
   rt --help
   rt search "import\\s+os" --all
   ```
 
-- UI (lokalt):  
+- UI (lokalt):
   ```bash
   rt serve --host 0.0.0.0 --port 8765
   ```
   Åpne i nettleser: `http://<pi-ip>:8765`
 
 I UI:
+
 - velg verktøy via tabs (Search, Paste, Format, Clean, GH Raw, Backup, Settings)
 - statuslamper viser busy/ok/feil
 - “Oppskrifter” (recipes) i toppmenyen gir hurtigkall for vanlige jobber
@@ -119,6 +122,7 @@ I UI:
 Du kan kjøre UI som systemd-tjeneste. Setup-scriptet spør om dette; her er manuelle kommandoer om du trenger dem.
 
 ### Bruker-tjeneste (anbefalt)
+
 Støtter instanser via `@PORT`. Den bruker repoets `bin/rt` direkte.
 
 ```ini
@@ -139,6 +143,7 @@ WantedBy=default.target
 ```
 
 Aktiver:
+
 ```bash
 systemctl --user daemon-reload
 systemctl --user enable --now rtools@8765.service
@@ -166,6 +171,7 @@ WantedBy=multi-user.target
 ```
 
 Aktiver:
+
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now rtools.service
@@ -189,6 +195,7 @@ Alle konfigfiler ligger i `tools/configs/` (kan overstyres med `RTOOLS_CONFIG_DI
 - `global_config.json` – UI/CLI-globale innstillinger (f.eks. `default_project`, `default_tool`)
 
 UI leser og **kan lagre**:
+
 - globale innstillinger via fanen **Settings** (oppdaterer `global_config.json`)
 - clean-targets via **Clean → Lagre targets** (oppdaterer `clean_config.json`)
 - backup-script sti via **Settings** (oppdaterer `backup_config.json`)
@@ -205,18 +212,22 @@ For opplasting i backup:
    Du kan kjøre veiviseren (anbefalt). Fra UI: `Backup → Env-sjekk` gir status, og wizard kan kjøres via CLI (eller via `extra/dropbox_get_refresh_token.py`).
 
    Typisk:
+
    ```bash
    rt backup --wizard
    ```
+
    (eller kjør `python extra/dropbox_get_refresh_token.py` manuelt og følg instruksene)
 
 2. **Miljøvariabler**  
    Verktøyene bruker:
+
    ```
    DROPBOX_APP_KEY
    DROPBOX_APP_SECRET
    DROPBOX_REFRESH_TOKEN
    ```
+
    Disse blir gjerne lagt i `~/.bashrc` av setup-scriptet eller wizard. Åpne ny terminal etterpå.
 
 3. **Diagnose**  
@@ -228,6 +239,7 @@ For opplasting i backup:
 
 - **`rt` ikke funnet**  
   Sørg for at `~/.local/bin` er på PATH, og at symlinken peker til prosjektets `bin/rt`:
+
   ```bash
   which rt
   ls -l ~/.local/bin/rt
@@ -235,24 +247,27 @@ For opplasting i backup:
 
 - **Konfig mangler / feil sti**  
   I UI, åpne **Settings → diagnose** (viser `/api/debug-config`). Sjekk `RTOOLS_CONFIG_DIR`, og at alle forventede filer finnes. Du kan også sette:
+
   ```bash
   export RTOOLS_CONFIG_DIR="/home/<deg>/tools/configs"
   ```
 
 - **Rart eierskap etter sudo-kjøring**  
   Hvis du manuelt kjørte ting med `sudo`, kan noen filer eies av root. Korriger:
+
   ```bash
   sudo chown -R $USER:$USER ~/tools ~/.local/bin/rt
   ```
 
 - **Systemd starter ikke**  
   Sjekk logger:
+
   ```bash
   systemctl --user status rtools@8765.service
   journalctl --user -u rtools@8765.service -f
   ```
 
-- **Pip krasj / “No module named pip._internal...”**  
+- **Pip krasj / “No module named pip.\_internal...”**  
   Oppgrader pip inne i venv med `python -m pip` (ikke `pip` fra PATH):
   ```bash
   source venv/bin/activate
@@ -282,12 +297,11 @@ rm -rf ~/tools
 
 ## Tips
 
-- Du kan sette **standard prosjekt** og **standard verktøy** i **Settings** (lagres i `global_config.json`), så åpner UI på riktig sted automatisk.  
-- I **Backup** kan du velge profil fra `backup_profiles.json`.  
-- **Statuslamper**: grønn = ok, gult pulserende = kjører, rød = feil.  
+- Du kan sette **standard prosjekt** og **standard verktøy** i **Settings** (lagres i `global_config.json`), så åpner UI på riktig sted automatisk.
+- I **Backup** kan du velge profil fra `backup_profiles.json`.
+- **Statuslamper**: grønn = ok, gult pulserende = kjører, rød = feil.
 - **Prosjektvelgeren** i headeren styrer hvilket prosjekt alle verktøy opererer på (via `project_root`-override til `load_config`).
 
 ---
 
 God hacking! 🚀
-

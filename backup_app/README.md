@@ -1,4 +1,4 @@
-# backup\_app
+# backup_app
 
 Fleksibel backup av valgfri katalog, med valgfritt prosjektnavn, valgfri versjon, **.backupignore/--exclude**, **retention** og valgfri **Dropbox-opplasting**.
 
@@ -59,7 +59,7 @@ Dette vil pakke `~/countdown` og lagre i `~/backups`.
   --exclude "*.env" --include-hidden
 ```
 
-> Standard-utestengte mapper (venv/.venv/.git/node\_modules/**pycache**/dist/build/backups) ekskluderes uansett hvor de ligger i treet.
+> Standard-utestengte mapper (venv/.venv/.git/node_modules/**pycache**/dist/build/backups) ekskluderes uansett hvor de ligger i treet.
 
 **Retention (behold kun 10 siste):**
 
@@ -111,4 +111,3 @@ coverage/*
 
 - `DROPBOX_TOKEN` – kreves for Dropbox-opplasting (leses også fra `.env`).
 - `BACKUP_DEFAULT_DEST` – valgfritt: overstyr standard destinasjon (default `~/backups`).
-
