@@ -55,10 +55,14 @@ def status(root: Path) -> str:
 
 def diff(root: Path, staged: bool = False) -> str:
     _ensure_repo(root)
-    args = ["diff", "--color"]
-    if staged: args.append("--cached")
-    rc, out = _git(root, *args)
-    return out
+    # Ren unified diff, ingen eksterne difftools, ingen farger (ANSI) for UI-vennlig output
+    args = ["diff", "--no-ext-diff", "--unified=3", "--color=never"]
+    if staged:
+        args.append("--cached")
+    _, out = _git(root, *args)
+    # Vær hjelpsom når det er tomt
+    return out if out.strip() else "[git] Ingen endringer å vise (arbeidskatalogen er ren).\n"
+
 
 def log(root: Path, n: int = 10) -> str:
     _ensure_repo(root)
