@@ -22,6 +22,16 @@ def _current_branch(root: Path) -> str:
     if rc != 0: return ""
     return (out or "").strip()
 
+# ← offentlig wrapper (bruk denne i API)
+def current_branch(root: Path) -> str:
+    _ensure_repo(root)
+    return _current_branch(root)
+
+def _has_upstream(root: Path, branch: str) -> bool:
+    # rc != 0 når @{u} ikke finnes
+    rc, _ = _git(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
+    return rc == 0
+
 def _is_clean(root: Path) -> bool:
     rc, out = _git(root, "status", "--porcelain")
     return rc == 0 and (out.strip() == "")
@@ -62,13 +72,17 @@ def fetch(root: Path, remote: str) -> str:
 
 def pull_rebase(root: Path, remote: str, branch: str, ff_only: bool = True) -> str:
     _ensure_repo(root)
-    args = ["pull", "--rebase" if not ff_only else "--ff-only", remote, branch]
+    args = ["pull", "--ff-only" if ff_only else "--rebase", remote, branch]
     rc, out = _git(root, *args)
     return out
 
 def push(root: Path, remote: str, branch: str) -> str:
     _ensure_repo(root)
-    rc, out = _git(root, "push", remote, branch)
+    # sett upstream hvis den mangler
+    if not _has_upstream(root, branch):
+        rc, out = _git(root, "push", "-u", remote, branch)
+    else:
+        rc, out = _git(root, "push", remote, branch)
     return out
 
 def switch(root: Path, branch: str) -> str:
@@ -86,10 +100,8 @@ def create_branch(root: Path, name: str, base: Optional[str] = None) -> str:
 
 def merge_to(root: Path, source: str, target: str, ff_only: bool = True) -> str:
     _ensure_repo(root)
-    # Bytt til target
     rc, out = _git(root, "switch", target)
     if rc != 0: return out
-    # Merge
     args = ["merge"]
     if ff_only: args.append("--ff-only")
     args.append(source)
@@ -102,15 +114,13 @@ def add_commit_push(root: Path, remote: str, branch: str, message: str) -> str:
         return "[git] Commit-melding kan ikke være tom.\n"
     rc, out_a = _git(root, "add", "-A")
     rc2, out_c = _git(root, "commit", "-m", message)
-    # commit kan returnere rc=1 ved "ingenting å committe"; håndter mykt:
-    rc3, out_p = _git(root, "push", remote, branch)
+    rc3, out_p = _git(root, "push", remote, branch)  # bruker eksisterende upstream eller lager i push() via UI-knapp
     rc4, out_s = _git(root, "status", "-sb")
     return out_a + out_c + out_p + out_s
 
 def run_git(cfg: Dict, action: str, args: Dict) -> str:
     """
     action: status | branches | remotes | fetch | pull | push | switch | create | merge | acp | diff | log | sync
-    args:   remote, branch, base, message, ff_only(bool), staged(bool), n(int)
     """
     root = Path(cfg.get("project_root", ".")).resolve()
     gcfg = (cfg.get("git") or {})
@@ -120,11 +130,7 @@ def run_git(cfg: Dict, action: str, args: Dict) -> str:
     ff_only = bool(args.get("ff_only", True))
     staged = bool(args.get("staged", False))
     n = int(args.get("n", 10))
-
-    # beskyttede branches
     protected = set(gcfg.get("protected_branches", ["main", "master"]))
-    if action in {"merge","push","acp","sync","pull"} and branch in (None, ""):
-        branch = _current_branch(root)
 
     if action == "status":
         return status(root)

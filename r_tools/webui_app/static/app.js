@@ -79,21 +79,51 @@ async function fetchGitRemotes() {
   if (!sel.value && sel.options.length) sel.value = sel.options[0].value;
 }
 
-async function fetchGitBranches() {
+async function fetchGitBranches(selectValueIfPresent) {
   const proj = currentProject();
   const r = await fetch('/api/git/branches?project=' + encodeURIComponent(proj));
   const d = await r.json();
   const sel = document.getElementById('git_branch');
+  if (!sel) return;
   sel.innerHTML = '';
   (d.branches || []).forEach((name) => {
     const o = document.createElement('option');
     o.value = name;
-    o.textContent = name === d.current ? name + ' (current)' : name;
+    o.textContent = name === d.current ? `${name} (current)` : name;
     sel.appendChild(o);
   });
-  if (d.current) sel.value = d.current;
+  // sett valgt verdi
+  const want = selectValueIfPresent || d.current;
+  if (want && [...sel.options].some(o => o.value === want)) {
+    sel.value = want;
+  } else if (sel.options.length) {
+    sel.value = sel.options[0].value;
+  }
 }
 
+// Switch
+const elGitSwitch = document.getElementById('git_switch');
+if (elGitSwitch) elGitSwitch.onclick = () =>
+  withStatus('git','out_git', async () => {
+    const branch = document.getElementById('git_branch')?.value;
+    const res = await runTool('git', { args: { action:'switch', branch } }, 'out_git');
+    await fetchGitBranches(branch);  // ← refresh & hold selection
+    return res;
+  });
+
+// Create
+const elGitCreate = document.getElementById('git_create');
+if (elGitCreate) elGitCreate.onclick = () =>
+  withStatus('git','out_git', async () => {
+    const branch = document.getElementById('git_newbranch')?.value.trim();
+    const base = document.getElementById('git_base')?.value.trim();
+    if (!branch) return;
+    const res = await runTool('git', { args: { action:'create', branch, base } }, 'out_git');
+    await fetchGitBranches(branch);  // ← vis ny branch og velg den
+    // tøm feltet for ny branch for å unngå forvirring
+    const nb = document.getElementById('git_newbranch'); if (nb) nb.value = '';
+    return res;
+  });
 
 
 
@@ -141,23 +171,6 @@ if (elGitSync) elGitSync.onclick = () =>
     const branch = document.getElementById('git_branch')?.value;
     const remote = document.getElementById('git_remote')?.value || 'origin';
     return runTool('git', { args: { action:'sync', branch, remote } }, 'out_git');
-  });
-
-// Switch
-const elGitSwitch = document.getElementById('git_switch');
-if (elGitSwitch) elGitSwitch.onclick = () =>
-  withStatus('git','out_git', async () => {
-    const branch = document.getElementById('git_branch')?.value;
-    return runTool('git', { args: { action:'switch', branch } }, 'out_git');
-  });
-
-// Create
-const elGitCreate = document.getElementById('git_create');
-if (elGitCreate) elGitCreate.onclick = () =>
-  withStatus('git','out_git', async () => {
-    const branch = document.getElementById('git_newbranch')?.value.trim();
-    const base = document.getElementById('git_base')?.value.trim();
-    return runTool('git', { args: { action:'create', branch, base } }, 'out_git');
   });
 
 // Merge → main

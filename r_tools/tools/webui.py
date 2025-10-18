@@ -174,15 +174,16 @@ def api_clean_targets_set(project: str | None = Query(None), body: dict[str, Any
 # -------- Git hjelpe-endepunkt (remotes/branches) --------
 @app.get("/api/git/branches")
 def api_git_branches(project: str | None = Query(None)):
-    from .git_tools import list_branches as _list_br
+    from .git_tools import list_branches, current_branch
     cfg = load_config("git_config.json", Path(project).resolve() if project else None, None)
-    root = Path(cfg.get("project_root", ".")).resolve()
+    root = Path(cfg.get("project_root",".")).resolve()
     try:
-        arr = _list_br(root)
-        # legg gjerne på current senere om ønskelig
-        return {"branches": arr}
+        arr = list_branches(root)
+        cur = current_branch(root)
+        return {"branches": arr, "current": cur}
     except Exception as e:
-        return {"error": f"{type(e).__name__}: {e}", "branches": []}
+        return {"error": f"{type(e).__name__}: {e}", "branches": [], "current": None}
+
 
 @app.get("/api/git/remotes")
 def api_git_remotes(project: str | None = Query(None)):
@@ -324,13 +325,15 @@ def api_run(body: RunPayload):
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
 
+        # i api_run (git-grenen)
         elif tool == "git":
-            # Viktig: send ov (project_root) videre slik at run_git jobber i korrekt repo
+            # RIKTIG import
             from .git_tools import run_git
-            cfg = load_config(tool_cfg, project_path, ov or None)
-            out = run_git(cfg, args.get("action", "status"), args)
-            dt = int((time.time() - t0) * 1000)
+            cfg = load_config(tool_cfg, project_path, None)
+            out = run_git(cfg, args.get("action","status"), args)
+            dt = int((time.time()-t0)*1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
+
 
         else:
             raise HTTPException(status_code=400, detail=f"Ukjent tool: {tool}")
