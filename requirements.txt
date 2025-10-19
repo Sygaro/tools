@@ -6,3 +6,4 @@ uvicorn>=0.29.0
 pydantic>=2.6.0
 dropbox>=11.36.0
 python-dotenv>=1.0.1
+pytest

@@ -290,3 +290,60 @@ textarea {
   margin-bottom: 8px;
   opacity: 0.85;
 }
+
+/* Help panel card */
+.help-panel {
+  display: none;             /* hidden by default */
+  align-self: start;         /* avoid stretching */
+  max-height: none;          /* allow full content */
+  overflow: auto;
+}
+
+/* When help is visible, show it */
+.help-panel.open {
+  display: block;
+}
+
+/* Collapsed takes zero space (we already use display:none) */
+.help-panel.collapsed {
+  display: none !important;
+}
+
+/* Nice monospace blocks in help */
+.help-pre {
+  background: var(--code-bg, #0e1220);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  overflow: auto;
+}
+.help-list {
+  margin: 0 0 8px 0;
+  padding-left: 18px;
+}
+.help-list li { margin: 6px 0; }
+
+/* Responsive: on narrow viewports, stack */
+@media (max-width: 980px) {
+  main .row {
+    grid-template-columns: 1fr;
+  }
+  .help-panel.open {
+    order: 2; /* help appears after the tool */
+  }
+}
+.help-panel { display: none; align-self: start; max-height: none; overflow: auto; }
+.help-panel.open { display: block; }
+.help-panel.collapsed { display: none !important; }
+
+/* Når en help-panel er åpen, bruk 2 kolonner (tool + hjelp) */
+.row:has(.help-panel.open) {
+  grid-template-columns: 1fr 1fr;
+}
+
+/* Responsivt */
+@media (max-width: 980px) {
+  .row { grid-template-columns: 1fr; }
+  .help-panel.open { order: 2; }
+}
+

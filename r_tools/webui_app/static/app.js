@@ -1,7 +1,7 @@
 // tools/r_tools/webui_app/static/app.js
 const PREF_KEY = (proj) => `rtools:prefs:${proj}`;
 const ACTIVE_TOOL_KEY = 'rtools:active_tool';
-const TOOLS = ['search','replace','paste','format','clean','gh-raw','backup','git','settings','help'];
+const TOOLS = ['search','replace','paste','format','clean','gh-raw','backup','git','settings'];
 const STATUS_IDS = {
   search: 'status_search',
   replace: 'status_replace',
@@ -36,10 +36,11 @@ function setActiveTool(name) {
     const sec = document.querySelector(`.tool[data-tool="${t}"]`);
     const tab = document.querySelector(`.tab[data-tool="${t}"]`);
     if (sec) sec.classList.toggle('active', t === name);
-    if (tab) tab.classList.toggle('active', t === name);
-  });
-  localStorage.setItem(ACTIVE_TOOL_KEY, name);
+   if (tab) tab.classList.toggle('active', t === name);
+});
+localStorage.setItem(ACTIVE_TOOL_KEY, name);
 }
+
 document.getElementById('tabs').addEventListener('click', (e) => {
   const btn = e.target.closest('.tab');
   if (!btn) return;
@@ -1337,6 +1338,70 @@ async function loadFormatFromConfig(preferPrefs = true) {
   _setVal('fmt_cleanup_excl_exts', Array.isArray(cl.exclude_exts) ? cl.exclude_exts.join(',') : cl.exclude_exts);
 }
 
+
+function renderHelp(tool) {
+  const p = HELP_CONTENT[tool] || { title: 'Hjelp', html: '<p>Ingen hjelp for dette verktøyet.</p>' };
+  const title = document.getElementById('help_title');
+  const body = document.getElementById('help_body');
+  if (title) title.textContent = p.title;
+  if (body) body.innerHTML = p.html;
+}
+(function wireHelpToggle(){
+  const btn = document.getElementById('help_toggle');
+  const body = document.getElementById('help_body');
+  if (!btn || !body) return;
+  btn.addEventListener('click', () => {
+    const isHidden = body.style.display === 'none';
+    body.style.display = isHidden ? '' : 'none';
+    btn.textContent = (isHidden ? '▾' : '▸') + ' Hjelp';
+  });
+})();
+
+/* ---------- Help panel control (per-tool) ---------- */
+
+const HELP_STATE_KEY = (tool) => `rtools:help_open:${tool}`;
+
+function setHelpOpen(tool, open) {
+  const panel = document.querySelector(`.help-panel[data-help-for="${tool}"]`);
+  if (!panel) return;
+  if (open) {
+    panel.classList.add('open');
+    panel.classList.remove('collapsed');
+    localStorage.setItem(HELP_STATE_KEY(tool), '1');
+  } else {
+    panel.classList.remove('open');
+    panel.classList.add('collapsed');
+    localStorage.removeItem(HELP_STATE_KEY(tool));
+  }
+}
+
+function toggleHelp(tool) {
+  const panel = document.querySelector(`.help-panel[data-help-for="${tool}"]`);
+  if (!panel) return;
+  const isOpen = panel.classList.contains('open');
+  setHelpOpen(tool, !isOpen);
+}
+
+/* Wire up any .help-toggle buttons (data-help-for="git" etc.) */
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.help-toggle');
+  if (!btn) return;
+  const tool = btn.getAttribute('data-help-for');
+  if (!tool) return;
+  toggleHelp(tool);
+});
+
+/* When switching tabs, only the active tool's help is relevant */
+const _origSetActiveTool = setActiveTool;
+setActiveTool = function (name) {
+  _origSetActiveTool(name);
+  // Hide all help panels
+  document.querySelectorAll('.help-panel').forEach((p) => p.classList.remove('open'));
+  // Re-open if previously open for this tool
+  const wasOpen = !!localStorage.getItem(HELP_STATE_KEY(name));
+  if (wasOpen) setHelpOpen(name, true);
+};
+
 /* Init */
 Object.keys(STATUS_IDS).forEach((k) => setStatus(k, 'idle'));
 setLamp('status_global', 'idle');
@@ -1364,8 +1429,7 @@ setLamp('status_init', 'busy');
         .then((r) => r.json())
         .catch(() => ({ global: {} }));
       setActiveTool(s?.global?.default_tool || 'search');
-    }
-    
+}
     await loadSettings();
     await loadFormatUIFromConfig();
     loadPrefs();
