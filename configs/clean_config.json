@@ -1,24 +1,25 @@
 {
+  "project_root": ".",
   "clean": {
     "enable": true,
     "targets": {
-      "build": true,
-      "coverage": true,
-      "dist": true,
-      "ds_store": true,
-      "editor": true,
-      "mypy_cache": true,
-      "node_modules": true,
       "pycache": true,
       "pytest_cache": true,
+      "mypy_cache": true,
       "ruff_cache": true,
+      "coverage": true,
+      "build": true,
+      "dist": true,
+      "node_modules": false,
+      "editor": true,
+      "ds_store": true,
       "thumbs_db": true
     },
-    "allow_venv_clean": false,
     "extra_globs": [],
     "skip_globs": [],
     "honor_global_excludes": false,
-    "exclude_dirs": ["artifacts", "data/cache"],
-    "exclude_files": []
+    "exclude_dirs": [],
+    "exclude_files": [],
+    "allow_venv_clean": false
   }
 }
