@@ -289,13 +289,21 @@ def api_run(body: RunPayload):
             dt = int((time.time() - t0) * 1000)
             return {"output": text, "rc": rc, "summary": {"rc": rc, "duration_ms": dt}}
         elif tool == "gh-raw":
-            gov = {"gh_raw": {}}
-            if "path_prefix" in args:
-                gov["gh_raw"]["path_prefix"] = args["path_prefix"]
-            cfg = load_config(tool_cfg, project_path, gov)
-            out = _capture(run_gh_raw, cfg=cfg, as_json=False)
+            # Send UI-overstyringer videre (path_prefix + wrap_read)
+            gov: dict[str, Any] = {"gh_raw": {}}
+            if "path_prefix" in args and args["path_prefix"] is not None:
+                gov["gh_raw"]["path_prefix"] = str(args["path_prefix"])
+
+            cfg = load_config(tool_cfg, project_path, gov if gov["gh_raw"] else None)
+
+            # flagg fra UI (checkbox) eller evt. fra config
+            wrap = bool(args.get("wrap_read", False) or (cfg.get("gh_raw", {}) or {}).get("wrap_read", False))
+
+            # Ny signatur i gh_raw.run_gh_raw: (cfg, wrap_read: bool = False)
+            out = _capture(run_gh_raw, cfg=cfg, wrap_read=wrap)
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
+
         elif tool == "replace":
             rov: dict[str, Any] = {"replace": {}}
             for k_src, k_dst in [("include", "include"), ("exclude", "exclude"), ("max_size", "max_size")]:

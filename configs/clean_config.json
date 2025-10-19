@@ -14,10 +14,11 @@
       "ruff_cache": true,
       "thumbs_db": true
     },
+    "allow_venv_clean": false,
     "extra_globs": [],
     "skip_globs": [],
     "honor_global_excludes": false,
-    "exclude_dirs": [],
+    "exclude_dirs": ["artifacts", "data/cache"],
     "exclude_files": []
   }
 }

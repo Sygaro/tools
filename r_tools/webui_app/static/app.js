@@ -320,6 +320,7 @@ function savePrefs() {
     clean_what: document.getElementById('clean_what').value,
     clean_skip: document.getElementById('clean_skip').value,
     gh_prefix: document.getElementById('gh_prefix').value,
+    gh_wrap_read: document.getElementById('gh_wrap_read')?.checked,
     rep_find: document.getElementById('rep_find')?.value,
     rep_repl: document.getElementById('rep_repl')?.value,
     rep_regex: document.getElementById('rep_regex')?.checked,
@@ -390,6 +391,7 @@ function loadPrefs() {
     set('clean_what', p.clean_what)
     set('clean_skip', p.clean_skip)
     set('gh_prefix', p.gh_prefix)
+    set('gh_wrap_read', p.gh_wrap_read, true)
     set('rep_find', p.rep_find)
     set('rep_repl', p.rep_repl)
     set('rep_regex', p.rep_regex, true)
@@ -818,7 +820,7 @@ const PREF_FIELDS = `
 project search_terms search_all search_case search_max search_files_only search_path_mode
 search_limit_dirs search_limit_exts search_include search_exclude search_filename_search
 rep_filename_search paste_list_only paste_filename_search paste_max paste_out paste_include paste_exclude
-format_dry clean_what clean_skip gh_prefix
+format_dry clean_what clean_skip gh_prefix gh_wrap_read
 rep_find rep_repl rep_regex rep_case rep_backup rep_dry rep_showdiff rep_max rep_include rep_exclude
 fmt_prettier_enable fmt_prettier_globs fmt_prettier_printWidth fmt_prettier_tabWidth fmt_prettier_singleQuote fmt_prettier_semi fmt_prettier_trailingComma
 fmt_black_enable fmt_black_paths fmt_black_line_length fmt_black_target
@@ -1134,9 +1136,19 @@ document.getElementById('run_clean').onclick = () =>
   })
 
 document.getElementById('run_gh').onclick = () =>
-  withStatus('gh-raw', 'out_gh', async () =>
-    runTool('gh-raw', { args: { path_prefix: document.getElementById('gh_prefix').value.trim() } }, 'out_gh')
-  )
+  withStatus('gh-raw', 'out_gh', async () => {
+    return runTool(
+      'gh-raw',
+      {
+        args: {
+          path_prefix: document.getElementById('gh_prefix').value.trim(),
+          wrap_read: !!document.getElementById('gh_wrap_read')?.checked,
+        },
+      },
+      'out_gh'
+    );
+  });
+
 
 if (document.getElementById('run_backup')) {
   document.getElementById('run_backup').onclick = () =>

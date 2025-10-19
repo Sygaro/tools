@@ -393,10 +393,19 @@
             </div>
           </div>
           <div class="tool-body">
-            <label>Path prefix</label>
-            <input id="gh_prefix" type="text" placeholder="app/routes" />
-            <textarea id="out_gh" readonly></textarea>
-          </div>
+  <label>Path prefix</label>
+  <input id="gh_prefix" type="text" placeholder="app/routes" />
+
+  <div class="inline" style="margin-top:8px">
+    <label class="inline" title="Pakk utdata som /read(urls:[…]) med commit-låste blob-URLer (anbefalt når du deler filer med GPT-verktøy).">
+      <input id="gh_wrap_read" type="checkbox" />
+      Output som <code>/read(urls:[…])</code>
+    </label>
+  </div>
+
+  <textarea id="out_gh" readonly></textarea>
+</div>
+
         </section>
 
         <!-- BACKUP -->

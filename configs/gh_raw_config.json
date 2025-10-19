@@ -3,6 +3,7 @@
     "user": "Sygaro",
     "repo": "tools",
     "branch": "main",
-    "path_prefix": ""
+    "path_prefix": "",
+    "wrap_read": false
   }
 }
