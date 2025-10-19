@@ -176,7 +176,7 @@ def api_clean_targets_set(project: str | None = Query(None), body: dict[str, Any
 def api_git_branches(project: str | None = Query(None)):
     from .git_tools import list_branches, current_branch
     cfg = load_config("git_config.json", Path(project).resolve() if project else None, None)
-    root = Path(cfg.get("project_root",".")).resolve()
+    root = Path(cfg.get("project_root", ".")).resolve()
     try:
         arr = list_branches(root)
         cur = current_branch(root)
@@ -328,7 +328,7 @@ def api_run(body: RunPayload):
         # i api_run (git-grenen)
         elif tool == "git":
             # RIKTIG import
-            from .git_tools import run_git
+            from .git_tools import run_git, list_branches, list_remotes, current_branch
             cfg = load_config(tool_cfg, project_path, None)
             out = run_git(cfg, args.get("action","status"), args)
             dt = int((time.time()-t0)*1000)

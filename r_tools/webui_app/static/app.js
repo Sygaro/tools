@@ -101,31 +101,6 @@ async function fetchGitBranches(selectValueIfPresent) {
   }
 }
 
-// Switch
-const elGitSwitch = document.getElementById('git_switch');
-if (elGitSwitch) elGitSwitch.onclick = () =>
-  withStatus('git','out_git', async () => {
-    const branch = document.getElementById('git_branch')?.value;
-    const res = await runTool('git', { args: { action:'switch', branch } }, 'out_git');
-    await fetchGitBranches(branch);  // ← refresh & hold selection
-    return res;
-  });
-
-// Create
-const elGitCreate = document.getElementById('git_create');
-if (elGitCreate) elGitCreate.onclick = () =>
-  withStatus('git','out_git', async () => {
-    const branch = document.getElementById('git_newbranch')?.value.trim();
-    const base = document.getElementById('git_base')?.value.trim();
-    if (!branch) return;
-    const res = await runTool('git', { args: { action:'create', branch, base } }, 'out_git');
-    await fetchGitBranches(branch);  // ← vis ny branch og velg den
-    // tøm feltet for ny branch for å unngå forvirring
-    const nb = document.getElementById('git_newbranch'); if (nb) nb.value = '';
-    return res;
-  });
-
-
 
 /* Oppskrifter dropdown */
 async function fetchRecipes() {
@@ -162,7 +137,8 @@ async function fetchRecipes() {
 // Quick status
 const elGitStatus = document.getElementById('git_status');
 if (elGitStatus) elGitStatus.onclick = () =>
-  withStatus('git','out_git', async () => runTool('git', { args: { action:'status' } }, 'out_git'));
+  withStatus('git','out_git', async () =>
+    runTool('git', { args: { action:'status' } }, 'out_git'));
 
 // Quick sync (fetch + pull --ff-only)
 const elGitSync = document.getElementById('git_sync');
@@ -170,7 +146,43 @@ if (elGitSync) elGitSync.onclick = () =>
   withStatus('git','out_git', async () => {
     const branch = document.getElementById('git_branch')?.value;
     const remote = document.getElementById('git_remote')?.value || 'origin';
-    return runTool('git', { args: { action:'sync', branch, remote } }, 'out_git');
+    const res = await runTool('git', { args: { action:'sync', branch, remote } }, 'out_git');
+    return res;
+  });
+
+// Switch
+const elGitSwitch = document.getElementById('git_switch');
+if (elGitSwitch) elGitSwitch.onclick = () =>
+  withStatus('git','out_git', async () => {
+    const branch = document.getElementById('git_branch')?.value;
+    const res = await runTool('git', { args: { action:'switch', branch } }, 'out_git');
+    await fetchGitBranches(); // oppdater valget/markering
+    return res;
+  });
+
+// Stash & switch
+const elGitStashSwitch = document.getElementById('git_stash_switch');
+if (elGitStashSwitch) elGitStashSwitch.onclick = () =>
+  withStatus('git','out_git', async () => {
+    const branch = document.getElementById('git_branch')?.value;
+    const res = await runTool('git', { args: { action:'stash_switch', branch } }, 'out_git');
+    await fetchGitBranches();
+    return res;
+  });
+
+// Create
+const elGitCreate = document.getElementById('git_create');
+if (elGitCreate) elGitCreate.onclick = () =>
+  withStatus('git','out_git', async () => {
+    const branch = document.getElementById('git_newbranch')?.value.trim();
+    const base = document.getElementById('git_base')?.value.trim();
+    const res = await runTool('git', { args: { action:'create', branch, base } }, 'out_git');
+    await fetchGitBranches();
+    if (branch) {
+      const sel = document.getElementById('git_branch');
+      if (sel) sel.value = branch;
+    }
+    return res;
   });
 
 // Merge → main
@@ -179,7 +191,13 @@ if (elGitMergeMain) elGitMergeMain.onclick = () =>
   withStatus('git','out_git', async () => {
     const source = document.getElementById('git_branch')?.value;
     const target = 'main';
-    return runTool('git', { args: { action:'merge', source, target, confirm:true } }, 'out_git');
+    const confirmProtected = document.getElementById('git_confirm')?.checked || false;
+    const res = await runTool('git', { args: { action:'merge', source, target, confirm: confirmProtected } }, 'out_git');
+    // Etter merge: bytt dropdown og oppdater status
+    await fetchGitBranches();
+    const sel = document.getElementById('git_branch');
+    if (sel) sel.value = target;
+    return res;
   });
 
 // Push
@@ -189,7 +207,9 @@ if (elGitPush) elGitPush.onclick = () =>
     const branch = document.getElementById('git_branch')?.value;
     const remote = document.getElementById('git_remote')?.value || 'origin';
     const confirmProtected = document.getElementById('git_confirm')?.checked || false;
-    return runTool('git', { args: { action:'push', branch, remote, confirm: confirmProtected } }, 'out_git');
+    const precheck = document.getElementById('git_precheck')?.checked || false;
+    const precheck_tests = document.getElementById('git_precheck_tests')?.checked || false;
+    return runTool('git', { args: { action:'push', branch, remote, confirm: confirmProtected, precheck, precheck_tests } }, 'out_git');
   });
 
 // ACP
@@ -200,7 +220,9 @@ if (elGitAcp) elGitAcp.onclick = () =>
     const remote = document.getElementById('git_remote')?.value || 'origin';
     const msg = document.getElementById('git_message')?.value || '';
     const confirmProtected = document.getElementById('git_confirm')?.checked || false;
-    return runTool('git', { args: { action:'acp', branch, remote, message: msg, confirm: confirmProtected } }, 'out_git');
+    const precheck = document.getElementById('git_precheck')?.checked || false;
+    const precheck_tests = document.getElementById('git_precheck_tests')?.checked || false;
+    return runTool('git', { args: { action:'acp', branch, remote, message: msg, confirm: confirmProtected, precheck, precheck_tests } }, 'out_git');
   });
 
 // Diff
@@ -218,6 +240,13 @@ if (elGitLog) elGitLog.onclick = () =>
     const n = parseInt(document.getElementById('git_log_n')?.value || '10', 10);
     return runTool('git', { args: { action:'log', n } }, 'out_git');
   });
+
+// Resolve helper
+const elGitResolve = document.getElementById('git_resolve');
+if (elGitResolve) elGitResolve.onclick = () =>
+  withStatus('git','out_git', async () =>
+    runTool('git', { args: { action:'resolve' } }, 'out_git'));
+
 
 
 document.getElementById('recipes_toggle').onclick = (e) => {
