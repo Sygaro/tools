@@ -1,16 +1,15 @@
 # ./tools/r_tools/tools/git_tools.py
 from __future__ import annotations
+
 import fnmatch
 import subprocess
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
 
-def _run(cmd: List[str], cwd: Path) -> Tuple[int, str]:
-    proc = subprocess.run(cmd, cwd=str(cwd), text=True,
-                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+def _run(cmd: list[str], cwd: Path) -> tuple[int, str]:
+    proc = subprocess.run(cmd, cwd=str(cwd), text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     return proc.returncode, proc.stdout
 
-def _git(cwd: Path, *args: str) -> Tuple[int, str]:
+def _git(cwd: Path, *args: str) -> tuple[int, str]:
     return _run(["git", *args], cwd)
 
 def _ensure_repo(root: Path) -> None:
@@ -20,7 +19,7 @@ def _ensure_repo(root: Path) -> None:
 
 def current_branch(root: Path) -> str:
     rc, out = _git(root, "rev-parse", "--abbrev-ref", "HEAD")
-    if rc != 0: 
+    if rc != 0:
         return ""
     return (out or "").strip()
 
@@ -28,16 +27,18 @@ def _is_clean(root: Path) -> bool:
     rc, out = _git(root, "status", "--porcelain")
     return rc == 0 and (out.strip() == "")
 
-def list_branches(root: Path) -> List[str]:
+def list_branches(root: Path) -> list[str]:
     _ensure_repo(root)
     rc, out = _git(root, "branch", "--format", "%(refname:short)")
-    if rc != 0: return []
+    if rc != 0:
+        return []
     return [ln.strip() for ln in out.splitlines() if ln.strip()]
 
-def list_remotes(root: Path) -> List[str]:
+def list_remotes(root: Path) -> list[str]:
     _ensure_repo(root)
     rc, out = _git(root, "remote")
-    if rc != 0: return []
+    if rc != 0:
+        return []
     return [ln.strip() for ln in out.splitlines() if ln.strip()]
 
 def status(root: Path) -> str:
@@ -79,7 +80,7 @@ def switch(root: Path, branch: str) -> str:
     rc, out = _git(root, "switch", branch)
     return out
 
-def create_branch(root: Path, name: str, base: Optional[str] = None) -> str:
+def create_branch(root: Path, name: str, base: str | None = None) -> str:
     _ensure_repo(root)
     if base:
         rc, out = _git(root, "switch", "-c", name, base)
@@ -116,7 +117,7 @@ def add_commit_push(root: Path, remote: str, branch: str, message: str) -> str:
 
 # ---------- Nytt: glob-beskyttelse + pre-push sjekk + stash&switch + resolve helper ----------
 
-def _is_protected(branch: str, patterns: List[str]) -> bool:
+def _is_protected(branch: str, patterns: list[str]) -> bool:
     b = branch or ""
     for pat in patterns:
         pat = str(pat).strip()
@@ -130,13 +131,13 @@ def _is_protected(branch: str, patterns: List[str]) -> bool:
             return True
     return False
 
-def pre_push_check(root: Path, run_tests: bool = False) -> Tuple[int, str]:
+def pre_push_check(root: Path, run_tests: bool = False) -> tuple[int, str]:
     """
     Kjør Black --check og Ruff check (og valgfritt pytest).
     Returnerer (rc, samlet_output). rc!=0 betyr stopp push.
     """
     _ensure_repo(root)
-    steps: List[Tuple[List[str], str]] = [
+    steps: list[tuple[list[str], str]] = [
         (["black", "--check", "."], "black --check ."),
         (["ruff", "check", "."], "ruff check ."),
     ]
@@ -144,7 +145,7 @@ def pre_push_check(root: Path, run_tests: bool = False) -> Tuple[int, str]:
         steps.append((["pytest", "-q"], "pytest -q"))
 
     rc_total = 0
-    out_all: List[str] = []
+    out_all: list[str] = []
     for cmd, label in steps:
         rc, out = _run(cmd, root)
         out_all.append(f"▶ {label}\n{out}")
@@ -152,7 +153,7 @@ def pre_push_check(root: Path, run_tests: bool = False) -> Tuple[int, str]:
             rc_total = rc
     return rc_total, "\n".join(out_all) + ("\n" if out_all else "")
 
-def stash_switch(root: Path, branch: str, message: Optional[str] = None) -> str:
+def stash_switch(root: Path, branch: str, message: str | None = None) -> str:
     """
     Legg bort lokale endringer og bytt branch.
     """
@@ -190,7 +191,7 @@ def resolve_helper(root: Path) -> str:
         guide.append("  - Aksepter 'ours':        git checkout --ours  <fil> && git add <fil>")
     return "\n".join(guide) + "\n"
 
-def run_git(cfg: Dict, action: str, args: Dict) -> str:
+def run_git(cfg: dict, action: str, args: dict) -> str:
     """
     action: status | branches | remotes | fetch | pull | push | switch | create | merge | acp | diff | log | sync
             | stash_switch | resolve
@@ -198,9 +199,9 @@ def run_git(cfg: Dict, action: str, args: Dict) -> str:
             precheck(bool), precheck_tests(bool), target, source
     """
     root = Path(cfg.get("project_root", ".")).resolve()
-    gcfg = (cfg.get("git") or {})
+    gcfg = cfg.get("git") or {}
     remote = args.get("remote") or gcfg.get("default_remote", "origin")
-    base   = args.get("base")   or gcfg.get("default_base", "main")
+    base = args.get("base") or gcfg.get("default_base", "main")
     branch = args.get("branch") or current_branch(root)
     ff_only = bool(args.get("ff_only", True))
     staged = bool(args.get("staged", False))

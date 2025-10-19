@@ -174,7 +174,8 @@ def api_clean_targets_set(project: str | None = Query(None), body: dict[str, Any
 # -------- Git hjelpe-endepunkt (remotes/branches) --------
 @app.get("/api/git/branches")
 def api_git_branches(project: str | None = Query(None)):
-    from .git_tools import list_branches, current_branch
+    from .git_tools import current_branch, list_branches
+
     cfg = load_config("git_config.json", Path(project).resolve() if project else None, None)
     root = Path(cfg.get("project_root", ".")).resolve()
     try:
@@ -184,10 +185,10 @@ def api_git_branches(project: str | None = Query(None)):
     except Exception as e:
         return {"error": f"{type(e).__name__}: {e}", "branches": [], "current": None}
 
-
 @app.get("/api/git/remotes")
 def api_git_remotes(project: str | None = Query(None)):
     from .git_tools import list_remotes as _list_rm
+
     cfg = load_config("git_config.json", Path(project).resolve() if project else None, None)
     root = Path(cfg.get("project_root", ".")).resolve()
     try:
@@ -240,7 +241,6 @@ def api_run(body: RunPayload):
             )
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
-
         elif tool == "paste":
             pov: dict[str, Any] = {"paste": {}}
             for key in ["out_dir", "max_lines", "include", "exclude", "filename_search"]:
@@ -258,7 +258,6 @@ def api_run(body: RunPayload):
             out = _capture(run_paste, cfg=cfg, list_only=list_only)
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
-
         elif tool == "format":
             cfg = load_config(tool_cfg, project_path, ov or None)
             override = args.get("override") or None
@@ -270,7 +269,6 @@ def api_run(body: RunPayload):
             if "Traceback (most recent call last)" in out or "[error]" in out:
                 rc = 2
             return {"output": out, "summary": {"rc": rc, "duration_ms": dt}}
-
         elif tool == "clean":
             cov: dict[str, Any] = {"clean": {}}
             if "targets" in args and isinstance(args["targets"], dict):
@@ -286,12 +284,10 @@ def api_run(body: RunPayload):
             out = _capture(run_clean, cfg=cfg, only=args.get("what") or None, skip=args.get("skip") or [], dry_run=dry_run)
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
-
         elif tool == "backup":
             rc, text = run_backup(args or {})
             dt = int((time.time() - t0) * 1000)
             return {"output": text, "rc": rc, "summary": {"rc": rc, "duration_ms": dt}}
-
         elif tool == "gh-raw":
             gov = {"gh_raw": {}}
             if "path_prefix" in args:
@@ -300,7 +296,6 @@ def api_run(body: RunPayload):
             out = _capture(run_gh_raw, cfg=cfg, as_json=False)
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
-
         elif tool == "replace":
             rov: dict[str, Any] = {"replace": {}}
             for k_src, k_dst in [("include", "include"), ("exclude", "exclude"), ("max_size", "max_size")]:
@@ -328,16 +323,14 @@ def api_run(body: RunPayload):
         # i api_run (git-grenen)
         elif tool == "git":
             # RIKTIG import
-            from .git_tools import run_git, list_branches, list_remotes, current_branch
+            from .git_tools import run_git
+
             cfg = load_config(tool_cfg, project_path, None)
-            out = run_git(cfg, args.get("action","status"), args)
-            dt = int((time.time()-t0)*1000)
+            out = run_git(cfg, args.get("action", "status"), args)
+            dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
-
-
         else:
             raise HTTPException(status_code=400, detail=f"Ukjent tool: {tool}")
-
     except Exception as e:
         dt = int((time.time() - t0) * 1000)
         return {"error": f"{type(e).__name__}: {e}", "summary": {"rc": 1, "duration_ms": dt}}
@@ -360,6 +353,7 @@ def api_format_preview(body: PreviewPayload):
     except Exception:
         raise HTTPException(status_code=400, detail="path må være relativ til project_root")
     from .format_code import format_preview
+
     try:
         text = format_preview(cfg, rel_path=rel)
         return {"output": text}
@@ -478,6 +472,7 @@ def favicon():
         b"\x00\x00\x02\x00\x01\xe2!\xbc3\x00\x00\x00\x00IEND\xaeB`\x82"
     )
     return Response(content=png_1x1, media_type="image/png")
+
 # Trygge UI-innstillinger (globale)
 @app.get("/api/settings")
 def api_settings():

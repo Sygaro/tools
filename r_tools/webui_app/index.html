@@ -43,7 +43,6 @@
     </header>
     <main>
       <div class="row">
-
         <!-- SEARCH -->
         <section class="card tool tool-search" data-tool="search">
           <div class="tool-header">
@@ -483,15 +482,17 @@
           </div>
           <div class="tool-body">
             <div class="grid two">
-              <label>Remote
+              <label
+                >Remote
                 <select id="git_remote"></select>
               </label>
-              <label>Branch
+              <label
+                >Branch
                 <select id="git_branch"></select>
               </label>
             </div>
 
-            <div class="inline" style="margin-top:8px">
+            <div class="inline" style="margin-top: 8px">
               <button class="btn" id="git_switch" title="Bytt til valgt branch">Switch</button>
               <button class="btn" id="git_stash_switch" title="Stash + switch til valgt branch">Stash &amp; switch</button>
               <button class="btn" id="git_push" title="Push valgt branch">Push</button>
@@ -502,21 +503,24 @@
               </label>
             </div>
 
-            <div class="grid two" style="margin-top:12px">
-              <label>Ny branch
+            <div class="grid two" style="margin-top: 12px">
+              <label
+                >Ny branch
                 <input id="git_newbranch" type="text" placeholder="feature/my-branch" />
               </label>
-              <label>Base
+              <label
+                >Base
                 <input id="git_base" type="text" placeholder="main" />
               </label>
               <button class="btn" id="git_create" title="Opprett og bytt til ny branch">Create</button>
             </div>
 
-            <div class="grid two" style="margin-top:12px">
-              <label class="grow">Commit-melding
+            <div class="grid two" style="margin-top: 12px">
+              <label class="grow"
+                >Commit-melding
                 <input id="git_message" type="text" placeholder="Kort, beskrivende commit-melding" />
               </label>
-              <div class="inline" style="gap: 10px; align-items:center;">
+              <div class="inline" style="gap: 10px; align-items: center">
                 <label class="inline" title="Sjekk Black/Ruff (og ev. tester) før push.">
                   <input type="checkbox" id="git_precheck" />
                   Pre-push sjekk
@@ -529,13 +533,14 @@
               </div>
             </div>
 
-            <div class="inline" style="margin-top:8px">
+            <div class="inline" style="margin-top: 8px">
               <label class="inline" title="Hvis krysset av, vises diff for indekserte (staged) filer.">
                 <input type="checkbox" id="git_staged" />
                 Diff (staged)
               </label>
-              <label style="margin-left:16px">Logg: siste
-                <input id="git_log_n" type="number" min="1" value="10" style="width:6rem" />
+              <label style="margin-left: 16px"
+                >Logg: siste
+                <input id="git_log_n" type="number" min="1" value="10" style="width: 6rem" />
                 commits
               </label>
             </div>
@@ -556,31 +561,40 @@
             <h3>Hva gjør knappene?</h3>
             <ul class="help-list">
               <li><b>Status</b> — viser <code>git status -sb</code>.</li>
-              <li><b>Sync</b> — <code>git fetch</code> &amp; <code>git pull --ff-only &lt;remote&gt; &lt;branch&gt;</code> for valgt branch.</li>
+              <li>
+                <b>Sync</b> — <code>git fetch</code> &amp; <code>git pull --ff-only &lt;remote&gt; &lt;branch&gt;</code> for valgt branch.
+              </li>
               <li><b>Diff</b> — viser <code>git diff</code>. Kryss av «Diff (staged)» for <code>git diff --cached</code>.</li>
               <li><b>Log</b> — viser <code>git log -N --oneline --graph --decorate</code> (N styres av «Logg: siste»).</li>
               <li><b>Switch</b> — bytt til valgt branch (<code>git switch</code>).</li>
               <li><b>Stash &amp; switch</b> — <code>git stash push -u</code> (med melding) → <code>git switch</code> til valgt branch.</li>
-              <li><b>Push</b> — <code>git push &lt;remote&gt; &lt;branch&gt;</code>. Stopper på beskyttet branch uten «Bekreft beskyttet branch».</li>
+              <li>
+                <b>Push</b> — <code>git push &lt;remote&gt; &lt;branch&gt;</code>. Stopper på beskyttet branch uten «Bekreft beskyttet
+                branch».
+              </li>
               <li><b>Create</b> — ny branch fra «Base» og bytt til den (<code>git switch -c &lt;ny&gt; &lt;base&gt;</code>).</li>
-              <li><b>ACP</b> — Add + Commit + (Pre-push sjekk?) + Push + Status.<br/>
+              <li>
+                <b>ACP</b> — Add + Commit + (Pre-push sjekk?) + Push + Status.<br />
                 Sekvens: <code>git add -A → git commit -m "&lt;...&gt;" →</code> (valgfri sjekk) <code>→ git push → git status -sb</code>.
               </li>
-              <li><b>Merge → main</b> — bytter til <code>main</code> og kjører <code>git merge --ff-only &lt;kilde&gt;</code>.
-                Krever «Bekreft beskyttet branch» for å beskytte <code>main/master/release/*</code>.
+              <li>
+                <b>Merge → main</b> — bytter til <code>main</code> og kjører <code>git merge --ff-only &lt;kilde&gt;</code>. Krever «Bekreft
+                beskyttet branch» for å beskytte <code>main/master/release/*</code>.
               </li>
               <li><b>Resolve help</b> — viser tips ved konflikt og en veiviser for å løse/avbryte en merge.</li>
             </ul>
 
             <h3>Beskyttelse av branches</h3>
             <p>Verktøyet beskytter <code>base</code>-branchen(e) og mønstre fra <code>configs/git_config.json</code>:</p>
-<pre class="help-pre">{
+            <pre class="help-pre">
+{
   "git": {
     "default_remote": "origin",
     "default_base": "main",
     "protected_branches": ["main","master","release/*"]
   }
-}</pre>
+}</pre
+            >
             <p class="muted">For <code>release/*</code> tolkes glob riktig. Push/Merge stopper uten eksplisitt bekreftelse.</p>
 
             <h3>Trygg «Merge → main» (anbefalt flyt)</h3>

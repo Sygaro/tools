@@ -188,7 +188,10 @@ def build_parser() -> argparse.ArgumentParser:
     dg_sub.add_parser("dropbox", help="Sjekk .env + Dropbox OAuth refresh")
     # ---- git ----
     gp = sub.add_parser("git", help="Git-kommandoer (status, push, switch, create, merge, acp, fetch, pull, sync, diff, log)")
-    gp.add_argument("action", choices=["status","branches","remotes","fetch","pull","push","switch","create","merge","acp","diff","log","sync"])
+    gp.add_argument(
+        "action",
+        choices=["status", "branches", "remotes", "fetch", "pull", "push", "switch", "create", "merge", "acp", "diff", "log", "sync"],
+    )
     gp.add_argument("--project", type=Path, help="Overstyr project_root")
     gp.add_argument("--remote")
     gp.add_argument("--branch")
@@ -472,6 +475,7 @@ def main() -> None:
             sys.exit(0)
     if args.cmd == "git":
         from .tools.git_tools import run_git
+
         ov = {}
         if getattr(args, "project", None):
             ov["project_root"] = str(args.project)

@@ -1,37 +1,26 @@
 {
   "format": {
-    "allow_home": false,
     "prettier": {
       "enable": true,
       "globs": ["**/*.{html,css,js,ts,tsx,json,yml,yaml,md}"],
-      "ignore": ["!**/node_modules/**", "!**/dist/**", "!**/._*", "!**/.DS_Store"],
-      "printWidth": 140,
-      "tabWidth": 2,
-      "singleQuote": true,
-      "semi": true,
-      "trailingComma": "es5"
+      "extra_args": ["--print-width", "140", "--tab-width", "2", "--single-quote", "--no-semi", "--trailing-comma", "es5"]
     },
     "black": {
       "enable": true,
       "paths": ["./"],
-      "line_length": 140,
-      "target": "py311"
+      "args": ["--line-length", "140", "--target-version", "py311"]
     },
     "ruff": {
       "enable": true,
-      "fix": true,
-      "unsafe_fixes": false,
-      "preview": false,
-      "select": "E,F,I,UP",
-      "ignore": "E501"
+      "args": ["check", "./", "--fix", "--select", "E,F,I,UP", "--ignore", "E501"]
     },
     "cleanup": {
       "enable": true,
-      "paths": [],
-      "exts": [".py", ".js", ".ts", ".css", ".html", ".json", ".sh"],
-      "exclude_exts": [".md"],
       "compact_blocks": true,
-      "max_consecutive_blanks": 1
+      "max_consecutive_blanks": 1,
+      "exts": [".py,.js,.ts,.css,.html,.json,.sh"],
+      "exclude_exts": [".md"],
+      "paths": []
     }
   }
 }
