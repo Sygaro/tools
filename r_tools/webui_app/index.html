@@ -43,11 +43,13 @@
     </header>
     <main>
       <div class="row">
+
         <!-- SEARCH -->
         <section class="card tool tool-search" data-tool="search">
           <div class="tool-header">
             <div class="tool-title">Search <span class="lamp" id="status_search"></span></div>
             <div class="tool-actions">
+              <button class="btn help-toggle" data-help-for="search">Hjelp</button>
               <button class="btn" id="run_search">Kjør search</button>
             </div>
           </div>
@@ -59,8 +61,7 @@
               <label>Max size <input id="search_max" type="number" value="2000000" /></label>
               <div class="inline">
                 <label><input type="checkbox" id="search_files_only" /> Kun fil-liste</label>
-                <label
-                  >Sti-format
+                <label>Sti-format
                   <select id="search_path_mode">
                     <option value="relative">relative</option>
                     <option value="full">full</option>
@@ -69,7 +70,6 @@
               </div>
               <label>Termer (regex, separert med komma)</label>
               <input id="search_terms" type="text" placeholder="f.eks: import\\s+os, class" />
-              <!-- NYTT: include/exclude + filnavn-søk globalt -->
               <label>Include globs (en per linje – tomt = bruk config/standard)</label>
               <textarea id="search_include" placeholder="**/*.py&#10;cli.py"></textarea>
               <label>Exclude globs (en per linje)</label>
@@ -91,11 +91,11 @@
             <div class="tool-title">Replace <span class="lamp" id="status_replace"></span></div>
             <div class="tool-actions">
               <label class="inline" style="gap: 6px"><input type="checkbox" id="rep_dry" checked /> Dry-run</label>
+              <button class="btn help-toggle" data-help-for="replace">Hjelp</button>
               <button class="btn" id="run_replace">Kjør replace</button>
             </div>
           </div>
           <div class="tool-body">
-            <!-- NYTT: Filnavn-søk globalt -->
             <label class="inline"><input type="checkbox" id="rep_filename_search" /> Filnavn-søk globalt</label>
             <label>Find (regex)</label>
             <input id="rep_find" type="text" placeholder="f.eks: \\bTODO\\b" />
@@ -122,6 +122,7 @@
           <div class="tool-header">
             <div class="tool-title">Paste <span class="lamp" id="status_paste"></span></div>
             <div class="tool-actions">
+              <button class="btn help-toggle" data-help-for="paste">Hjelp</button>
               <button class="btn" id="run_paste">Kjør paste</button>
             </div>
           </div>
@@ -149,6 +150,7 @@
               <label class="inline" style="gap: 6px"><input type="checkbox" id="format_dry" checked /> Dry-run</label>
               <button class="btn" id="fmt_load_cfg">Last fra default</button>
               <button class="btn" id="fmt_save_cfg">Lagre som default</button>
+              <button class="btn help-toggle" data-help-for="format">Hjelp</button>
               <button class="btn" id="run_format">Kjør format</button>
             </div>
           </div>
@@ -182,11 +184,7 @@
 
                 <label>
                   Globs
-                  <span
-                    class="help"
-                    data-tip="Hvilke filer Prettier skal formatere. Glob-mønstre relativt til prosjektrot. Eksempel: **/*.{html,css,js}"
-                    >ⓘ</span
-                  >
+                  <span class="help" data-tip="Hvilke filer Prettier skal formatere. Glob-mønstre relativt til prosjektrot. Eksempel: **/*.{html,css,js}">ⓘ</span>
                   <input id="fmt_prettier_globs" type="text" placeholder="**/*.{html,css,js}" />
                 </label>
 
@@ -216,11 +214,7 @@
 
                 <label>
                   Trailing comma
-                  <span
-                    class="help"
-                    data-tip="Hvor Prettier tillater trailing comma. Vanlig: es5 (objekter/arrays). all (også funksjoner der det støttes)."
-                    >ⓘ</span
-                  >
+                  <span class="help" data-tip="Hvor Prettier tillater trailing comma. es5 / all / none.">ⓘ</span>
                   <select id="fmt_prettier_trailingComma">
                     <option value="">(standard)</option>
                     <option value="none">none</option>
@@ -310,9 +304,7 @@
                 <label class="inline">
                   <input type="checkbox" id="fmt_cleanup_enable" />
                   Aktiver Cleanup
-                  <span class="help" data-tip="Trim whitespace, normaliser linjeslutt, begrens tomlinjer, gjør blokker mer kompakte."
-                    >ⓘ</span
-                  >
+                  <span class="help" data-tip="Trim whitespace, normaliser linjeslutt, begrens tomlinjer, gjør blokker mer kompakte.">ⓘ</span>
                 </label>
 
                 <label class="inline">
@@ -363,7 +355,9 @@
           <div class="tool-header">
             <div class="tool-title">Clean <span class="lamp" id="status_clean"></span></div>
             <div class="tool-actions">
-              <button class="btn" id="save_clean_targets">Lagre targets</button> <button class="btn" id="run_clean">Kjør clean</button>
+              <button class="btn" id="save_clean_targets">Lagre targets</button>
+              <button class="btn help-toggle" data-help-for="clean">Hjelp</button>
+              <button class="btn" id="run_clean">Kjør clean</button>
             </div>
           </div>
           <div class="tool-body">
@@ -394,6 +388,7 @@
           <div class="tool-header">
             <div class="tool-title">GH Raw <span class="lamp" id="status_gh"></span></div>
             <div class="tool-actions">
+              <button class="btn help-toggle" data-help-for="gh-raw">Hjelp</button>
               <button class="btn" id="run_gh">List raw-URLer</button>
             </div>
           </div>
@@ -409,6 +404,7 @@
           <div class="tool-header">
             <div class="tool-title">Backup <span class="lamp" id="status_backup"></span></div>
             <div class="tool-actions">
+              <button class="btn help-toggle" data-help-for="backup">Hjelp</button>
               <button class="btn" id="run_backup">Kjør backup</button>
               <button class="btn" id="run_backup_env">Env-sjekk</button>
             </div>
@@ -429,8 +425,7 @@
               <label>Dest <input id="bk_dest" type="text" placeholder="Backups (→ ~/Backups)" /></label>
             </div>
             <div class="inline">
-              <label
-                >Format
+              <label>Format
                 <select id="bk_format">
                   <option value="">default (zip)</option>
                   <option value="zip">zip</option>
@@ -449,8 +444,7 @@
             <div class="inline">
               <label>Keep <input id="bk_keep" type="number" min="0" value="0" /></label>
               <label>Dropbox path <input id="bk_dbx_path" type="text" placeholder="/Apps/backup_app/countdown" /></label>
-              <label
-                >Mode
+              <label>Mode
                 <select id="bk_dbx_mode">
                   <option value="">default (add)</option>
                   <option value="add">add</option>
@@ -482,17 +476,15 @@
           </div>
           <div class="tool-body">
             <div class="grid two">
-              <label
-                >Remote
+              <label>Remote
                 <select id="git_remote"></select>
               </label>
-              <label
-                >Branch
+              <label>Branch
                 <select id="git_branch"></select>
               </label>
             </div>
 
-            <div class="inline" style="margin-top: 8px">
+            <div class="inline" style="margin-top:8px">
               <button class="btn" id="git_switch" title="Bytt til valgt branch">Switch</button>
               <button class="btn" id="git_stash_switch" title="Stash + switch til valgt branch">Stash &amp; switch</button>
               <button class="btn" id="git_push" title="Push valgt branch">Push</button>
@@ -503,24 +495,21 @@
               </label>
             </div>
 
-            <div class="grid two" style="margin-top: 12px">
-              <label
-                >Ny branch
+            <div class="grid two" style="margin-top:12px">
+              <label>Ny branch
                 <input id="git_newbranch" type="text" placeholder="feature/my-branch" />
               </label>
-              <label
-                >Base
+              <label>Base
                 <input id="git_base" type="text" placeholder="main" />
               </label>
               <button class="btn" id="git_create" title="Opprett og bytt til ny branch">Create</button>
             </div>
 
-            <div class="grid two" style="margin-top: 12px">
-              <label class="grow"
-                >Commit-melding
+            <div class="grid two" style="margin-top:12px">
+              <label class="grow">Commit-melding
                 <input id="git_message" type="text" placeholder="Kort, beskrivende commit-melding" />
               </label>
-              <div class="inline" style="gap: 10px; align-items: center">
+              <div class="inline" style="gap: 10px; align-items:center;">
                 <label class="inline" title="Sjekk Black/Ruff (og ev. tester) før push.">
                   <input type="checkbox" id="git_precheck" />
                   Pre-push sjekk
@@ -533,14 +522,13 @@
               </div>
             </div>
 
-            <div class="inline" style="margin-top: 8px">
+            <div class="inline" style="margin-top:8px">
               <label class="inline" title="Hvis krysset av, vises diff for indekserte (staged) filer.">
                 <input type="checkbox" id="git_staged" />
                 Diff (staged)
               </label>
-              <label style="margin-left: 16px"
-                >Logg: siste
-                <input id="git_log_n" type="number" min="1" value="10" style="width: 6rem" />
+              <label style="margin-left:16px">Logg: siste
+                <input id="git_log_n" type="number" min="1" value="10" style="width:6rem" />
                 commits
               </label>
             </div>
@@ -549,71 +537,12 @@
           </div>
         </section>
 
-        <!-- HJELP (kun for Git) -->
-        <aside class="card help-panel" data-help-for="git">
-          <div class="tool-header">
-            <div class="tool-title">Hjelp: Git-verktøyet</div>
-            <div class="tool-actions">
-              <button class="btn help-toggle" data-help-for="git" title="Skjul">Skjul</button>
-            </div>
-          </div>
-          <div class="tool-body">
-            <h3>Hva gjør knappene?</h3>
-            <ul class="help-list">
-              <li><b>Status</b> — viser <code>git status -sb</code>.</li>
-              <li>
-                <b>Sync</b> — <code>git fetch</code> &amp; <code>git pull --ff-only &lt;remote&gt; &lt;branch&gt;</code> for valgt branch.
-              </li>
-              <li><b>Diff</b> — viser <code>git diff</code>. Kryss av «Diff (staged)» for <code>git diff --cached</code>.</li>
-              <li><b>Log</b> — viser <code>git log -N --oneline --graph --decorate</code> (N styres av «Logg: siste»).</li>
-              <li><b>Switch</b> — bytt til valgt branch (<code>git switch</code>).</li>
-              <li><b>Stash &amp; switch</b> — <code>git stash push -u</code> (med melding) → <code>git switch</code> til valgt branch.</li>
-              <li>
-                <b>Push</b> — <code>git push &lt;remote&gt; &lt;branch&gt;</code>. Stopper på beskyttet branch uten «Bekreft beskyttet
-                branch».
-              </li>
-              <li><b>Create</b> — ny branch fra «Base» og bytt til den (<code>git switch -c &lt;ny&gt; &lt;base&gt;</code>).</li>
-              <li>
-                <b>ACP</b> — Add + Commit + (Pre-push sjekk?) + Push + Status.<br />
-                Sekvens: <code>git add -A → git commit -m "&lt;...&gt;" →</code> (valgfri sjekk) <code>→ git push → git status -sb</code>.
-              </li>
-              <li>
-                <b>Merge → main</b> — bytter til <code>main</code> og kjører <code>git merge --ff-only &lt;kilde&gt;</code>. Krever «Bekreft
-                beskyttet branch» for å beskytte <code>main/master/release/*</code>.
-              </li>
-              <li><b>Resolve help</b> — viser tips ved konflikt og en veiviser for å løse/avbryte en merge.</li>
-            </ul>
-
-            <h3>Beskyttelse av branches</h3>
-            <p>Verktøyet beskytter <code>base</code>-branchen(e) og mønstre fra <code>configs/git_config.json</code>:</p>
-            <pre class="help-pre">
-{
-  "git": {
-    "default_remote": "origin",
-    "default_base": "main",
-    "protected_branches": ["main","master","release/*"]
-  }
-}</pre
-            >
-            <p class="muted">For <code>release/*</code> tolkes glob riktig. Push/Merge stopper uten eksplisitt bekreftelse.</p>
-
-            <h3>Trygg «Merge → main» (anbefalt flyt)</h3>
-            <ol>
-              <li>Velg feature-branch i «Branch».</li>
-              <li>Klikk <b>Sync</b> for å hente siste.</li>
-              <li>Klikk <b>Diff</b> og/eller <b>Log</b> for kontroll.</li>
-              <li>Huk av <b>Bekreft beskyttet branch</b>.</li>
-              <li>Klikk <b>Merge → main</b>. Ved konflikt, bruk <b>Resolve help</b>.</li>
-              <li>Kjør ev. <b>Push</b> fra <code>main</code>.</li>
-            </ol>
-          </div>
-        </aside>
-
         <!-- SETTINGS -->
         <section class="card tool tool-settings" data-tool="settings">
           <div class="tool-header">
             <div class="tool-title">Settings <span class="lamp" id="status_settings"></span></div>
             <div class="tool-actions">
+              <button class="btn help-toggle" data-help-for="settings">Hjelp</button>
               <button class="btn" id="cfg_reload">Reload</button>
               <button class="btn" id="cfg_format">Format</button>
               <button class="btn" id="cfg_save">Lagre</button>
@@ -656,6 +585,201 @@
             <textarea id="out_settings" readonly></textarea>
           </div>
         </section>
+
+        <!-- ===== HJELPEPANELER (høyre kolonne, per verktøy) ===== -->
+
+        <!-- Help: Search -->
+        <aside class="card help-panel" data-help-for="search">
+          <div class="tool-header">
+            <div class="tool-title">Hjelp: Search</div>
+            <div class="tool-actions"><button class="btn help-toggle" data-help-for="search">Skjul</button></div>
+          </div>
+          <div class="tool-body">
+            <ul class="help-list">
+              <li><b>Termer</b> – kommaseparerte regex (f.eks. <code>\\bTODO\\b, class\\s+\\w+</code>).</li>
+              <li><b>--all</b> – alle termer må matche i samme fil/linje (server styrer detaljene).</li>
+              <li><b>Case-sensitive</b> – slå på/av store/små.</li>
+              <li><b>KUN fil-liste</b> – vis bare stier (raskere når du vil browse resultatet).</li>
+              <li><b>Filnavn-søk</b> – match mot filnavn globalt, ikke innhold.</li>
+              <li><b>Include/Exclude globs</b> – én per linje. Tomt felt → bruk standard fra config.</li>
+              <li><b>Begrens til kataloger / endelser</b> – rask grovfiltrering før søk.</li>
+              <li><b>Sti-format</b> – relative (standard) eller full paths i output.</li>
+            </ul>
+            <p class="muted">Tips: Lagre ofte brukte søk i “Oppskrifter”.</p>
+          </div>
+        </aside>
+
+        <!-- Help: Replace -->
+        <aside class="card help-panel" data-help-for="replace">
+          <div class="tool-header">
+            <div class="tool-title">Hjelp: Replace</div>
+            <div class="tool-actions"><button class="btn help-toggle" data-help-for="replace">Skjul</button></div>
+          </div>
+          <div class="tool-body">
+            <ul class="help-list">
+              <li><b>Find</b> – regex. Bruk <code>\\b</code> for ordgrenser, grupper etc.</li>
+              <li><b>Dry-run</b> – kjør uten å skrive til disk. Anbefalt først.</li>
+              <li><b>Vis diff</b> – viser patch pr. fil for endringer.</li>
+              <li><b>Lag .bak</b> – sikkerhetskopi av filer som endres.</li>
+              <li><b>Include/Exclude</b> – samme semantikk som i Search.</li>
+              <li><b>Filnavn-søk</b> – finn/erstatt i filnavn (om backenden støtter rename).</li>
+              <li><b>Max size</b> – hopp over veldig store filer.</li>
+            </ul>
+            <p class="muted">Avansert: Backreferences i “Replace with” (f.eks. <code>$1</code>) følger backendens regex-regler.</p>
+          </div>
+        </aside>
+
+        <!-- Help: Paste -->
+        <aside class="card help-panel" data-help-for="paste">
+          <div class="tool-header">
+            <div class="tool-title">Hjelp: Paste</div>
+            <div class="tool-actions"><button class="btn help-toggle" data-help-for="paste">Skjul</button></div>
+          </div>
+          <div class="tool-body">
+            <ul class="help-list">
+              <li><b>Out dir</b> – mappe (relativ til prosjekt) der utvalgte filer kopieres/skrives.</li>
+              <li><b>Kun liste</b> – skriv bare liste over kandidater, ikke filer.</li>
+              <li><b>Filnavn-søk</b> – velg filer ved glob/regex på filnavn.</li>
+              <li><b>Max linjer</b> – kutt hver fil i output ved n linjer (for visning/deler).</li>
+              <li><b>Include/Exclude</b> – hvilke filer som telles med/utelates.</li>
+            </ul>
+            <p class="muted">Brukes f.eks. til å lage “paste_out/” med utdrag til deling.</p>
+          </div>
+        </aside>
+
+        <!-- Help: Format -->
+        <aside class="card help-panel" data-help-for="format">
+          <div class="tool-header">
+            <div class="tool-title">Hjelp: Format</div>
+            <div class="tool-actions"><button class="btn help-toggle" data-help-for="format">Skjul</button></div>
+          </div>
+          <div class="tool-body">
+            <ul class="help-list">
+              <li><b>Prettier</b> – styr globs og stilflagg (print width, tabs, semikolon, trailing comma).</li>
+              <li><b>Python</b> – <b>Black</b> (paths/line length/target) og <b>Ruff</b> (fix/preview/select/ignore).</li>
+              <li><b>Cleanup</b> – whitespace/opprydding: kompakte blokker, maks blanke linjer, filendelser.</li>
+              <li><b>Dry-run</b> – kjør uten skriv. Kombiner med “Forhåndsvis diff”.</li>
+              <li><b>Last/Lagre som default</b> – speiles til <code>configs/format_config.json</code>.</li>
+              <li><b>Forhåndsvis diff</b> – vis patch for én fil (nyttig for tuning).</li>
+              <li><b>Oppsummering</b> – kort statistikk (Prettier/Black/Ruff/Cleanup) under output.</li>
+            </ul>
+          </div>
+        </aside>
+
+        <!-- Help: Clean -->
+        <aside class="card help-panel" data-help-for="clean">
+          <div class="tool-header">
+            <div class="tool-title">Hjelp: Clean</div>
+            <div class="tool-actions"><button class="btn help-toggle" data-help-for="clean">Skjul</button></div>
+          </div>
+          <div class="tool-body">
+            <ul class="help-list">
+              <li><b>Modus</b> – <i>Dry-run</i> viser hva som slettes. <i>Apply</i> sletter faktisk filer.</li>
+              <li><b>Mål</b> – leses fra <code>clean_config.json</code>. Kryss av/av.</li>
+              <li><b>Begrens/Skip</b> – kommaseparerte mål som skal inkluderes/utelates.</li>
+              <li><b>Lagre targets</b> – lagrer valg tilbake til prosjektets config via API.</li>
+            </ul>
+            <p class="muted">⚠ Ved “Apply”: dobbeltsjekk at du ikke står i feil prosjekt.</p>
+          </div>
+        </aside>
+
+        <!-- Help: GH Raw -->
+        <aside class="card help-panel" data-help-for="gh-raw">
+          <div class="tool-header">
+            <div class="tool-title">Hjelp: GH Raw</div>
+            <div class="tool-actions"><button class="btn help-toggle" data-help-for="gh-raw">Skjul</button></div>
+          </div>
+          <div class="tool-body">
+            <ul class="help-list">
+              <li>Generer raw.githubusercontent-URLer for filer under valgt prosjekt.</li>
+              <li><b>Path prefix</b> – begrens til en undermappe (f.eks. <code>app/routes</code>).</li>
+              <li>Resultatet kan limes i README, issues eller verktøy.</li>
+            </ul>
+          </div>
+        </aside>
+
+        <!-- Help: Backup -->
+        <aside class="card help-panel" data-help-for="backup">
+          <div class="tool-header">
+            <div class="tool-title">Hjelp: Backup</div>
+            <div class="tool-actions"><button class="btn help-toggle" data-help-for="backup">Skjul</button></div>
+          </div>
+          <div class="tool-body">
+            <ul class="help-list">
+              <li><b>Config/Profil</b> – leses fra <code>configs/backup_profiles.json</code> (overstyr via “Config”).</li>
+              <li><b>Project/Version/Tag</b> – metadata i arkivnavn.</li>
+              <li><b>Source/Dest</b> – mappealias fra config (f.eks. <code>countdown</code> → <code>~/countdown</code>).</li>
+              <li><b>Format</b> – zip (default) / tar.gz / tgz.</li>
+              <li><b>Exclude</b> – mønstre pr. linje eller kommaseparert.</li>
+              <li><b>Dropbox</b> – sti og mode (add/overwrite) hvis profil støtter opplasting.</li>
+              <li><b>Env-sjekk</b> – validerer at Dropbox/avhengigheter er satt opp.</li>
+            </ul>
+            <p class="muted">Tips: Bruk “Keep” for å auto-prune gamle backups (0 = behold alle).</p>
+          </div>
+        </aside>
+
+        <!-- Help: Git (allerede i bruk) -->
+        <aside class="card help-panel" data-help-for="git">
+          <div class="tool-header">
+            <div class="tool-title">Hjelp: Git-verktøyet</div>
+            <div class="tool-actions"><button class="btn help-toggle" data-help-for="git" title="Skjul">Skjul</button></div>
+          </div>
+          <div class="tool-body">
+            <h3>Hva gjør knappene?</h3>
+            <ul class="help-list">
+              <li><b>Status</b> — viser <code>git status -sb</code>.</li>
+              <li><b>Sync</b> — <code>git fetch</code> &amp; <code>git pull --ff-only &lt;remote&gt; &lt;branch&gt;</code> for valgt branch.</li>
+              <li><b>Diff</b> — viser <code>git diff</code>. Kryss av «Diff (staged)» for <code>git diff --cached</code>.</li>
+              <li><b>Log</b> — viser <code>git log -N --oneline --graph --decorate</code> (N styres av «Logg: siste»).</li>
+              <li><b>Switch</b> — bytt til valgt branch (<code>git switch</code>).</li>
+              <li><b>Stash &amp; switch</b> — <code>git stash push -u</code> (med melding) → <code>git switch</code> til valgt branch.</li>
+              <li><b>Push</b> — <code>git push &lt;remote&gt; &lt;branch&gt;</code>. Stopper på beskyttet branch uten «Bekreft beskyttet branch».</li>
+              <li><b>Create</b> — ny branch fra «Base» og bytt til den (<code>git switch -c &lt;ny&gt; &lt;base&gt;</code>).</li>
+              <li><b>ACP</b> — Add + Commit + (Pre-push sjekk?) + Push + Status.<br/>
+                Sekvens: <code>git add -A → git commit -m "&lt;...&gt;" →</code> (valgfri sjekk) <code>→ git push → git status -sb</code>.
+              </li>
+              <li><b>Merge → main</b> — bytter til <code>main</code> og kjører <code>git merge --ff-only &lt;kilde&gt;</code>. Krever «Bekreft beskyttet branch».</li>
+              <li><b>Resolve help</b> — tips/veiviser ved konflikt.</li>
+            </ul>
+
+            <h3>Beskyttelse av branches</h3>
+<pre class="help-pre">{
+  "git": {
+    "default_remote": "origin",
+    "default_base": "main",
+    "protected_branches": ["main","master","release/*"]
+  }
+}</pre>
+            <p class="muted">Glob for <code>release/*</code> tolkes riktig. Push/Merge krever eksplisitt bekreftelse.</p>
+
+            <h3>Trygg «Merge → main»</h3>
+            <ol>
+              <li>Velg feature-branch.</li>
+              <li><b>Sync</b> → <b>Diff/Logg</b>.</li>
+              <li>Huk av <b>Bekreft beskyttet branch</b>.</li>
+              <li><b>Merge → main</b> (ved konflikt: <b>Resolve help</b>).</li>
+              <li>Evt. <b>Push</b> fra <code>main</code>.</li>
+            </ol>
+          </div>
+        </aside>
+
+        <!-- Help: Settings -->
+        <aside class="card help-panel" data-help-for="settings">
+          <div class="tool-header">
+            <div class="tool-title">Hjelp: Settings</div>
+            <div class="tool-actions"><button class="btn help-toggle" data-help-for="settings">Skjul</button></div>
+          </div>
+          <div class="tool-body">
+            <ul class="help-list">
+              <li><b>Default project/tool</b> – velges ved oppstart.</li>
+              <li><b>backup.py</b> – absolutt sti til script brukt av Backup-verktøyet.</li>
+              <li><b>Config-filer</b> – velg, rediger og lagre JSON under <code>configs/</code>.</li>
+              <li><b>Format</b> – “pretty print” av JSON i editoren.</li>
+              <li><b>Diagnose</b> – viser samlet config/debug-info i output-boksen.</li>
+            </ul>
+          </div>
+        </aside>
+
       </div>
     </main>
     <script src="/static/app.js"></script>

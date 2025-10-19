@@ -5,8 +5,8 @@
     "max_lines": 4000,
     "allow_binary": false,
     "filename_search": true,
-    "include": ["r_tools/webui_app/index.html", "r_tools/webui_app/static/styles.css", "r_tools/webui_app/static/app.js"],
-    "exclude": [".editorconfig", ".gitattributes", ".gitignore", ".pastechunksrc", ".prettierrc", ".vscode/settings.json", "README_DEV.md"],
+    "include": ["*.*","**/*.*"],
+    "exclude": [".env",".editorconfig", ".gitattributes", ".gitignore", ".pastechunksrc", ".prettierrc", ".vscode/settings.json", "README_DEV.md"],
     "only_globs": [],
     "skip_globs": []
   }
