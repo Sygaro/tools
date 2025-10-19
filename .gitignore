@@ -206,3 +206,7 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 paste_out/
+._README.md
+._global_config.json
+._paste_config.json
+._search_config.json
