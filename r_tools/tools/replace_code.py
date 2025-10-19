@@ -239,6 +239,8 @@ def run_replace(
     if not filename_search:
         filename_search = bool(rcfg.get("filename_search", False))
     include = _normalize_globs(include, filename_search) if include else None
+    exclude = _normalize_globs(exclude, filename_search) if exclude else None
+
     """
     Søk/erstatt over prosjektfiler.
     Parametre fra UI/CLI (args) overstyrer config.replace verdier; global exclude_dirs/files respekteres alltid.

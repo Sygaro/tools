@@ -43,7 +43,6 @@
     </header>
     <main>
       <div class="row">
-
         <!-- SEARCH -->
         <section class="card tool tool-search" data-tool="search">
           <div class="tool-header">
@@ -61,7 +60,8 @@
               <label>Max size <input id="search_max" type="number" value="2000000" /></label>
               <div class="inline">
                 <label><input type="checkbox" id="search_files_only" /> Kun fil-liste</label>
-                <label>Sti-format
+                <label
+                  >Sti-format
                   <select id="search_path_mode">
                     <option value="relative">relative</option>
                     <option value="full">full</option>
@@ -184,7 +184,11 @@
 
                 <label>
                   Globs
-                  <span class="help" data-tip="Hvilke filer Prettier skal formatere. Glob-mønstre relativt til prosjektrot. Eksempel: **/*.{html,css,js}">ⓘ</span>
+                  <span
+                    class="help"
+                    data-tip="Hvilke filer Prettier skal formatere. Glob-mønstre relativt til prosjektrot. Eksempel: **/*.{html,css,js}"
+                    >ⓘ</span
+                  >
                   <input id="fmt_prettier_globs" type="text" placeholder="**/*.{html,css,js}" />
                 </label>
 
@@ -304,7 +308,9 @@
                 <label class="inline">
                   <input type="checkbox" id="fmt_cleanup_enable" />
                   Aktiver Cleanup
-                  <span class="help" data-tip="Trim whitespace, normaliser linjeslutt, begrens tomlinjer, gjør blokker mer kompakte.">ⓘ</span>
+                  <span class="help" data-tip="Trim whitespace, normaliser linjeslutt, begrens tomlinjer, gjør blokker mer kompakte."
+                    >ⓘ</span
+                  >
                 </label>
 
                 <label class="inline">
@@ -393,19 +399,21 @@
             </div>
           </div>
           <div class="tool-body">
-  <label>Path prefix</label>
-  <input id="gh_prefix" type="text" placeholder="app/routes" />
+            <label>Path prefix</label>
+            <input id="gh_prefix" type="text" placeholder="app/routes" />
 
-  <div class="inline" style="margin-top:8px">
-    <label class="inline" title="Pakk utdata som /read(urls:[…]) med commit-låste blob-URLer (anbefalt når du deler filer med GPT-verktøy).">
-      <input id="gh_wrap_read" type="checkbox" />
-      Output som <code>/read(urls:[…])</code>
-    </label>
-  </div>
+            <div class="inline" style="margin-top: 8px">
+              <label
+                class="inline"
+                title="Pakk utdata som /read(urls:[…]) med commit-låste blob-URLer (anbefalt når du deler filer med GPT-verktøy)."
+              >
+                <input id="gh_wrap_read" type="checkbox" />
+                Output som <code>/read(urls:[…])</code>
+              </label>
+            </div>
 
-  <textarea id="out_gh" readonly></textarea>
-</div>
-
+            <textarea id="out_gh" readonly></textarea>
+          </div>
         </section>
 
         <!-- BACKUP -->
@@ -434,7 +442,8 @@
               <label>Dest <input id="bk_dest" type="text" placeholder="Backups (→ ~/Backups)" /></label>
             </div>
             <div class="inline">
-              <label>Format
+              <label
+                >Format
                 <select id="bk_format">
                   <option value="">default (zip)</option>
                   <option value="zip">zip</option>
@@ -453,7 +462,8 @@
             <div class="inline">
               <label>Keep <input id="bk_keep" type="number" min="0" value="0" /></label>
               <label>Dropbox path <input id="bk_dbx_path" type="text" placeholder="/Apps/backup_app/countdown" /></label>
-              <label>Mode
+              <label
+                >Mode
                 <select id="bk_dbx_mode">
                   <option value="">default (add)</option>
                   <option value="add">add</option>
@@ -485,15 +495,17 @@
           </div>
           <div class="tool-body">
             <div class="grid two">
-              <label>Remote
+              <label
+                >Remote
                 <select id="git_remote"></select>
               </label>
-              <label>Branch
+              <label
+                >Branch
                 <select id="git_branch"></select>
               </label>
             </div>
 
-            <div class="inline" style="margin-top:8px">
+            <div class="inline" style="margin-top: 8px">
               <button class="btn" id="git_switch" title="Bytt til valgt branch">Switch</button>
               <button class="btn" id="git_stash_switch" title="Stash + switch til valgt branch">Stash &amp; switch</button>
               <button class="btn" id="git_push" title="Push valgt branch">Push</button>
@@ -504,21 +516,24 @@
               </label>
             </div>
 
-            <div class="grid two" style="margin-top:12px">
-              <label>Ny branch
+            <div class="grid two" style="margin-top: 12px">
+              <label
+                >Ny branch
                 <input id="git_newbranch" type="text" placeholder="feature/my-branch" />
               </label>
-              <label>Base
+              <label
+                >Base
                 <input id="git_base" type="text" placeholder="main" />
               </label>
               <button class="btn" id="git_create" title="Opprett og bytt til ny branch">Create</button>
             </div>
 
-            <div class="grid two" style="margin-top:12px">
-              <label class="grow">Commit-melding
+            <div class="grid two" style="margin-top: 12px">
+              <label class="grow"
+                >Commit-melding
                 <input id="git_message" type="text" placeholder="Kort, beskrivende commit-melding" />
               </label>
-              <div class="inline" style="gap: 10px; align-items:center;">
+              <div class="inline" style="gap: 10px; align-items: center">
                 <label class="inline" title="Sjekk Black/Ruff (og ev. tester) før push.">
                   <input type="checkbox" id="git_precheck" />
                   Pre-push sjekk
@@ -531,13 +546,14 @@
               </div>
             </div>
 
-            <div class="inline" style="margin-top:8px">
+            <div class="inline" style="margin-top: 8px">
               <label class="inline" title="Hvis krysset av, vises diff for indekserte (staged) filer.">
                 <input type="checkbox" id="git_staged" />
                 Diff (staged)
               </label>
-              <label style="margin-left:16px">Logg: siste
-                <input id="git_log_n" type="number" min="1" value="10" style="width:6rem" />
+              <label style="margin-left: 16px"
+                >Logg: siste
+                <input id="git_log_n" type="number" min="1" value="10" style="width: 6rem" />
                 commits
               </label>
             </div>
@@ -737,28 +753,39 @@
             <h3>Hva gjør knappene?</h3>
             <ul class="help-list">
               <li><b>Status</b> — viser <code>git status -sb</code>.</li>
-              <li><b>Sync</b> — <code>git fetch</code> &amp; <code>git pull --ff-only &lt;remote&gt; &lt;branch&gt;</code> for valgt branch.</li>
+              <li>
+                <b>Sync</b> — <code>git fetch</code> &amp; <code>git pull --ff-only &lt;remote&gt; &lt;branch&gt;</code> for valgt branch.
+              </li>
               <li><b>Diff</b> — viser <code>git diff</code>. Kryss av «Diff (staged)» for <code>git diff --cached</code>.</li>
               <li><b>Log</b> — viser <code>git log -N --oneline --graph --decorate</code> (N styres av «Logg: siste»).</li>
               <li><b>Switch</b> — bytt til valgt branch (<code>git switch</code>).</li>
               <li><b>Stash &amp; switch</b> — <code>git stash push -u</code> (med melding) → <code>git switch</code> til valgt branch.</li>
-              <li><b>Push</b> — <code>git push &lt;remote&gt; &lt;branch&gt;</code>. Stopper på beskyttet branch uten «Bekreft beskyttet branch».</li>
+              <li>
+                <b>Push</b> — <code>git push &lt;remote&gt; &lt;branch&gt;</code>. Stopper på beskyttet branch uten «Bekreft beskyttet
+                branch».
+              </li>
               <li><b>Create</b> — ny branch fra «Base» og bytt til den (<code>git switch -c &lt;ny&gt; &lt;base&gt;</code>).</li>
-              <li><b>ACP</b> — Add + Commit + (Pre-push sjekk?) + Push + Status.<br/>
+              <li>
+                <b>ACP</b> — Add + Commit + (Pre-push sjekk?) + Push + Status.<br />
                 Sekvens: <code>git add -A → git commit -m "&lt;...&gt;" →</code> (valgfri sjekk) <code>→ git push → git status -sb</code>.
               </li>
-              <li><b>Merge → main</b> — bytter til <code>main</code> og kjører <code>git merge --ff-only &lt;kilde&gt;</code>. Krever «Bekreft beskyttet branch».</li>
+              <li>
+                <b>Merge → main</b> — bytter til <code>main</code> og kjører <code>git merge --ff-only &lt;kilde&gt;</code>. Krever «Bekreft
+                beskyttet branch».
+              </li>
               <li><b>Resolve help</b> — tips/veiviser ved konflikt.</li>
             </ul>
 
             <h3>Beskyttelse av branches</h3>
-<pre class="help-pre">{
+            <pre class="help-pre">
+{
   "git": {
     "default_remote": "origin",
     "default_base": "main",
     "protected_branches": ["main","master","release/*"]
   }
-}</pre>
+}</pre
+            >
             <p class="muted">Glob for <code>release/*</code> tolkes riktig. Push/Merge krever eksplisitt bekreftelse.</p>
 
             <h3>Trygg «Merge → main»</h3>
@@ -788,7 +815,6 @@
             </ul>
           </div>
         </aside>
-
       </div>
     </main>
     <script src="/static/app.js"></script>

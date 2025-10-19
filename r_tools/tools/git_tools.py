@@ -106,7 +106,6 @@ def add_commit(root: Path, message: str) -> str:
         return "[git] Commit-melding kan ikke være tom.\n"
     rc_a, out_a = _git(root, "add", "-A")
     rc_c, out_c = _git(root, "commit", "-m", message)
-    # git kan returnere rc=1 ved "ingenting å committe"
     return out_a + out_c
 
 def add_commit_push(root: Path, remote: str, branch: str, message: str) -> str:
@@ -123,7 +122,6 @@ def _is_protected(branch: str, patterns: list[str]) -> bool:
         pat = str(pat).strip()
         if not pat:
             continue
-        # eksakt navn eller glob (release/* etc.)
         if "*" in pat or "?" in pat or "[" in pat:
             if fnmatch.fnmatch(b, pat):
                 return True
@@ -132,10 +130,6 @@ def _is_protected(branch: str, patterns: list[str]) -> bool:
     return False
 
 def pre_push_check(root: Path, run_tests: bool = False) -> tuple[int, str]:
-    """
-    Kjør Black --check og Ruff check (og valgfritt pytest).
-    Returnerer (rc, samlet_output). rc!=0 betyr stopp push.
-    """
     _ensure_repo(root)
     steps: list[tuple[list[str], str]] = [
         (["black", "--check", "."], "black --check ."),
@@ -154,23 +148,18 @@ def pre_push_check(root: Path, run_tests: bool = False) -> tuple[int, str]:
     return rc_total, "\n".join(out_all) + ("\n" if out_all else "")
 
 def stash_switch(root: Path, branch: str, message: str | None = None) -> str:
-    """
-    Legg bort lokale endringer og bytt branch.
-    """
     _ensure_repo(root)
     msg = message or f"ui: auto-stash before switch to {branch}"
-    _git(root, "stash", "push", "-u", "-m", msg)  # ignorér rc – tom stash gir rc=0 med "No local changes"
+    _git(root, "stash", "push", "-u", "-m", msg)
+    rc, out = _git(root, "switch", "HEAD")
     rc, out = _git(root, "switch", branch)
     return f"[git] stash push: {msg}\n" + out
 
 def resolve_helper(root: Path) -> str:
-    """
-    Vis filer i konflikt + en kort veiviser for løsning/abort.
-    """
     _ensure_repo(root)
     rc, out = _git(root, "diff", "--name-only", "--diff-filter=U")
     files = [ln.strip() for ln in (out or "").splitlines() if ln.strip()]
-    guide = []
+    guide: list[str] = []
     guide.append("=== Merge-konflikter ===")
     if not files:
         guide.append("Ingen filer i konflikt.")
@@ -181,7 +170,7 @@ def resolve_helper(root: Path) -> str:
         guide.append("Veiviser:")
         guide.append("  1) Åpne filene over og løst markerte seksjoner (<<<<<<< ======= >>>>>>>).")
         guide.append("  2) Marker løst per fil:    git add <fil>")
-        guide.addend("  3) Fullfør merge:         git commit")
+        guide.append("  3) Fullfør merge:         git commit")
         guide.append("     (eller avbryt:         git merge --abort)")
         guide.append("")
         guide.append("Tips:")
@@ -192,12 +181,6 @@ def resolve_helper(root: Path) -> str:
     return "\n".join(guide) + "\n"
 
 def run_git(cfg: dict, action: str, args: dict) -> str:
-    """
-    action: status | branches | remotes | fetch | pull | push | switch | create | merge | acp | diff | log | sync
-            | stash_switch | resolve
-    args:   remote, branch, base, message, ff_only(bool), staged(bool), n(int),
-            precheck(bool), precheck_tests(bool), target, source
-    """
     root = Path(cfg.get("project_root", ".")).resolve()
     gcfg = cfg.get("git") or {}
     remote = args.get("remote") or gcfg.get("default_remote", "origin")
@@ -207,7 +190,6 @@ def run_git(cfg: dict, action: str, args: dict) -> str:
     staged = bool(args.get("staged", False))
     n = int(args.get("n", 10))
 
-    # beskyttede mønstre – støtte for glob (release/*)
     protected_patterns = list(gcfg.get("protected_branches", ["main", "master", "release/*"]))
 
     if action == "status":
@@ -230,8 +212,7 @@ def run_git(cfg: dict, action: str, args: dict) -> str:
                 return txt + "[git] Pre-push sjekk feilet. Avbryter push.\n"
         return push(root, remote, branch)
     if action == "switch":
-        out = switch(root, branch)
-        return out
+        return switch(root, branch)
     if action == "stash_switch":
         return stash_switch(root, branch, args.get("message"))
     if action == "create":
@@ -245,7 +226,6 @@ def run_git(cfg: dict, action: str, args: dict) -> str:
             return f"[git] Target '{tgt}' er beskyttet. Sett confirm=true for å bekrefte merge.\n"
         return merge_to(root, src, tgt, ff_only=ff_only)
     if action == "acp":
-        # Commit først, deretter (ev.) precheck, til slutt push
         message = args.get("message") or ""
         if _is_protected(branch, protected_patterns) and not bool(args.get("confirm", False)):
             return f"[git] '{branch}' er beskyttet. Sett confirm=true for ACP.\n"

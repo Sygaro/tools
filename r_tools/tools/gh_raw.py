@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
-
 
 def _req(url: str, token: str | None) -> dict[str, Any]:
     headers = {"User-Agent": "r_tools/gh_raw"}
@@ -15,7 +15,6 @@ def _req(url: str, token: str | None) -> dict[str, Any]:
     req = Request(url, headers=headers)
     with urlopen(req, timeout=30) as resp:
         return json.loads(resp.read().decode("utf-8"))
-
 
 def _fetch_tree(user: str, repo: str, ref: str, token: str | None) -> dict[str, Any]:
     """
@@ -27,14 +26,10 @@ def _fetch_tree(user: str, repo: str, ref: str, token: str | None) -> dict[str, 
     except HTTPError as e:
         msg = f"HTTP {e.code} for {url}. "
         if e.code == 404:
-            msg += (
-                "Sjekk at user/repo/branch stemmer, og at ref/branch eksisterer. "
-                "Er repo privat? Sett GITHUB_TOKEN i miljøet."
-            )
+            msg += "Sjekk at user/repo/branch stemmer, og at ref/branch eksisterer. " "Er repo privat? Sett GITHUB_TOKEN i miljøet."
         raise RuntimeError(msg) from e
     except URLError as e:
         raise RuntimeError(f"Nettverksfeil mot {url}: {e.reason}") from e
-
 
 def _resolve_commit_sha(user: str, repo: str, branch: str, token: str | None) -> str:
     """
@@ -58,7 +53,6 @@ def _resolve_commit_sha(user: str, repo: str, branch: str, token: str | None) ->
             raise RuntimeError("Uventet svar ved SHA-oppslag (fallback mangler sha).")
         return sha
 
-
 def _filter_paths(nodes: Iterable[dict[str, Any]], path_prefix: str | None) -> list[str]:
     out: list[str] = []
     pre = (path_prefix or "").strip().rstrip("/")
@@ -74,7 +68,6 @@ def _filter_paths(nodes: Iterable[dict[str, Any]], path_prefix: str | None) -> l
         else:
             out.append(p)
     return out
-
 
 def run_gh_raw(
     cfg: dict,

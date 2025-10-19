@@ -320,3 +320,4 @@ Nyttig:
   - URL:                ${T_BOLD}http://<din-ip>:$PORT${T_RESET}
   - Aktiver CLI env:    åpne ny terminal (eller ${T_BOLD}source $USER_HOME/.bashrc${T_RESET})
   - Kjør Dropbox wizard:  ${T_BOLD}rt backup --wizard${T_RESET}
+EOF

@@ -303,7 +303,6 @@ def api_run(body: RunPayload):
             out = _capture(run_gh_raw, cfg=cfg, wrap_read=wrap)
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
-
         elif tool == "replace":
             rov: dict[str, Any] = {"replace": {}}
             for k_src, k_dst in [("include", "include"), ("exclude", "exclude"), ("max_size", "max_size")]:

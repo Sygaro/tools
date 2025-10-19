@@ -13,6 +13,11 @@ Formatterings-pipeline:
       - {}-språk: fjern tom linje etter '{' og før '}'/'};'
   * Hopper over filendelser definert i cleanup.exclude_exts
 Hvorfor: gi kontroll på hvor aggressiv innstramming skal være og hvilke filer som ryddes.
+
+Viktig: Denne implementasjonen er bakoverkompatibel med eksisterende format_config.json:
+- prettier.extra_args støttes
+- black.args støttes
+- ruff.args støttes (overstyrer autogenererte arguments hvis satt)
 """
 from __future__ import annotations
 
@@ -28,7 +33,6 @@ from pathlib import Path
 
 # ---------- Runner utils ----------
 def _which_tool(name: str) -> str | None:
-    """Finn binær i samme venv som sys.executable, ellers i PATH."""
     exe = Path(sys.executable)
     candidate = exe.with_name(name)
     if candidate.exists() and candidate.is_file():
@@ -49,7 +53,7 @@ def _run(cmd: list[str], dry: bool, cwd: Path | None = None) -> int:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            cwd=str(cwd) if cwd else None,  # ← viktig
+            cwd=str(cwd) if cwd else None,
         )
         if proc.stdout:
             print(proc.stdout, end="")
@@ -58,11 +62,8 @@ def _run(cmd: list[str], dry: bool, cwd: Path | None = None) -> int:
         print(f"Verktøy ikke funnet: {cmd[0]}")
         return 127
 
-# ---------- Robust npx-deteksjon (NYTT) ----------
+# ---------- Robust npx-deteksjon ----------
 def _find_highest_nvm_npx(nvm_dir: Path) -> Path | None:
-    """
-    Finn høyeste npx under NVM_DIR/versions/node/*/bin/npx (vX.Y.Z).
-    """
     versions_dir = nvm_dir / "versions" / "node"
     if not versions_dir.is_dir():
         return None
@@ -84,16 +85,6 @@ def _find_highest_nvm_npx(nvm_dir: Path) -> Path | None:
     return best_path
 
 def _find_npx(project_root: Path, fmt_cfg: dict) -> tuple[str | None, str]:
-    """
-    Finn npx på en robust måte. Returnerer (sti, forklaring).
-    Søkerekkefølge:
-      1) format.npx_path (eksakt sti i format_config.json)
-      2) PATH (shutil.which)
-      3) prosjektets node_modules/.bin/npx
-      4) $NVM_DIR/versions/node/*/bin/npx (høyeste)
-      5) ~/.nvm/versions/node/*/bin/npx (høyeste)
-    """
-    # 1) eksplisitt override
     override = (fmt_cfg.get("npx_path") or "").strip()
     if override:
         p = Path(override).expanduser().resolve()
@@ -102,21 +93,17 @@ def _find_npx(project_root: Path, fmt_cfg: dict) -> tuple[str | None, str]:
         note = f"format.npx_path satt til {override}, men fant ikke kjørbar fil – prøver auto-detektering."
     else:
         note = ""
-    # 2) PATH
     found = shutil.which("npx")
     if found:
         return found, (note + (", " if note else "") + f"Fant npx i PATH: {found}")
-    # 3) lokal i prosjekt
     local_npx = project_root / "node_modules" / ".bin" / "npx"
     if local_npx.is_file() and os.access(local_npx, os.X_OK):
         return str(local_npx), (note + (", " if note else "") + f"Fant lokal npx: {local_npx}")
-    # 4) $NVM_DIR
     nvm_dir_env = os.environ.get("NVM_DIR")
     if nvm_dir_env:
         cand = _find_highest_nvm_npx(Path(nvm_dir_env).expanduser())
         if cand:
             return str(cand), (note + (", " if note else "") + f"Fant npx via $NVM_DIR: {cand}")
-    # 5) ~/.nvm
     cand = _find_highest_nvm_npx(Path.home() / ".nvm")
     if cand:
         return str(cand), (note + (", " if note else "") + f"Fant npx via ~/.nvm: {cand}")
@@ -183,7 +170,6 @@ def _is_docstring_start(line: str) -> bool:
     return s.startswith('"""') or s.startswith("'''")
 
 def _py_remove_blank_after_any_block(lines: list[str]) -> list[str]:
-    """Fjern tomlinje etter ALLE blokkslinjer (slutter med ':'), unntak for docstring."""
     out: list[str] = []
     i = 0
     n = len(lines)
@@ -191,7 +177,6 @@ def _py_remove_blank_after_any_block(lines: list[str]) -> list[str]:
         out.append(lines[i])
         cur = lines[i].rstrip()
         if cur.endswith(":"):
-            # dropp én tomlinje hvis neste ikke-tomme ikke er docstring
             if i + 1 < n and lines[i + 1].strip() == "":
                 j = i + 2
                 while j < n and lines[j].strip() == "":
@@ -202,7 +187,6 @@ def _py_remove_blank_after_any_block(lines: list[str]) -> list[str]:
     return out
 
 def _py_remove_blank_before_block_followups(lines: list[str]) -> list[str]:
-    """Fjern tomlinje før else/elif/except/finally."""
     followups = ("else:", "elif ", "except", "finally:")
     out: list[str] = []
     i = 0
@@ -217,7 +201,6 @@ def _py_remove_blank_before_block_followups(lines: list[str]) -> list[str]:
 
 # ---------- {}-languages (kompakte blokker) ----------
 def _brace_lang_remove_unneeded_blanks(lines: list[str]) -> list[str]:
-    """Fjern tom linje etter '{' og før '}'/'};'."""
     out: list[str] = []
     n = len(lines)
     for idx, ln in enumerate(lines):
@@ -234,7 +217,6 @@ def _brace_lang_remove_unneeded_blanks(lines: list[str]) -> list[str]:
 
 # ---------- Cleanup orchestrator ----------
 def _cleanup_text(text: str, ext: str, compact_blocks: bool, max_consecutive_blanks: int) -> str:
-    """Konservativ først; stram opp blokker hvis compact_blocks=True; kollaps tomlinjer til maks N."""
     t = _normalize_newlines(text)
     lines = t.split("\n")
     lines = _strip_trailing_spaces(lines)
@@ -256,7 +238,6 @@ def _cleanup_text(text: str, ext: str, compact_blocks: bool, max_consecutive_bla
             ".cpp",
         }:
             lines = _brace_lang_remove_unneeded_blanks(lines)
-    # Kollaps serier av tomlinjer til maks N
     keep_n = max(0, int(max_consecutive_blanks))
     lines = _collapse_blank_runs(lines, keep=keep_n)
     lines = _trim_file_blank_edges(lines)
@@ -267,20 +248,15 @@ def _iter_cleanup_targets(
     paths: list[str],
     exts: list[str],
     exclude_exts: list[str],
-    exclude_dirs: list[str],  # ← fra global_config.json
-    exclude_files: list[str],  # ← fra global_config.json (basenavn eller glob/relativ sti)
+    exclude_dirs: list[str],
+    exclude_files: list[str],
 ) -> Iterable[Path]:
-    """Finn filer å rydde: rekursivt under oppgitte paths (eller root).
-    Respekterer exclude_dirs og exclude_files fra global_config.json.
-    """
-    # Bygg absolutt liste over ekskluderte kataloger
     abs_excl_dirs: list[Path] = []
     for d in exclude_dirs or []:
         pd = Path(d)
         abs_excl_dirs.append((pd if pd.is_absolute() else (project_root / pd)).resolve())
 
     def _is_within_excluded(p: Path) -> bool:
-        # sjekk om p ligger under en ekskludert mappe
         for ex in abs_excl_dirs:
             try:
                 p.resolve().relative_to(ex)
@@ -289,7 +265,6 @@ def _iter_cleanup_targets(
                 continue
         return False
 
-    # For filer: tillat både basenavn og glob over relativ sti
     rel_globs = [g for g in (exclude_files or []) if any(ch in g for ch in "*?[]")]
     rel_names = set(g for g in (exclude_files or []) if not any(ch in g for ch in "*?[]"))
     roots: list[Path] = []
@@ -305,7 +280,6 @@ def _iter_cleanup_targets(
     inc = {e.lower() for e in exts}
 
     def _want(p: Path) -> bool:
-        # ekskluder via dirs
         if _is_within_excluded(p.parent):
             return False
         sfx = p.suffix.lower()
@@ -313,10 +287,8 @@ def _iter_cleanup_targets(
             return False
         if sfx not in inc:
             return False
-        # ekskluder via filer (basenavn)
         if p.name in rel_names:
             return False
-        # ekskluder via globs over RELATIV sti
         rel = p.resolve().relative_to(project_root).as_posix()
         for g in rel_globs:
             if fnmatch.fnmatch(rel, g):
@@ -346,7 +318,6 @@ def _run_cleanup(cfg: dict, dry_run: bool) -> None:
     exclude_exts = [e.lower() for e in (cln.get("exclude_exts") or [])]
     compact_blocks = bool(cln.get("compact_blocks", True))
     max_consecutive_blanks = int(cln.get("max_consecutive_blanks", 1))
-    # ← HENT fra global_config.json (toppnivå)
     global_excl_dirs = list(cfg.get("exclude_dirs", []))
     global_excl_files = list(cfg.get("exclude_files", []))
     changed = 0
@@ -377,15 +348,31 @@ def _run_cleanup(cfg: dict, dry_run: bool) -> None:
             print(f"Feil under cleanup {file_path}: {e}")
     print(f"Cleanup: {changed}/{total} filer endret")
 
+# ---------- helpers ----------
+def _as_csv_string(v: object) -> str:
+    if isinstance(v, str):
+        return v.strip()
+    if isinstance(v, (list, tuple)):
+        return ",".join(str(x).strip() for x in v if str(x).strip())
+    return ""
+
+def _as_list(v: object) -> list[str]:
+    if isinstance(v, (list, tuple)):
+        return [str(x).strip() for x in v if str(x).strip()]
+    if isinstance(v, str):
+        return [s.strip() for s in v.split(",") if s.strip()]
+    return []
+
+def _list_or_empty(v: object) -> list[str]:
+    return [str(x) for x in v] if isinstance(v, (list, tuple)) else ([] if v in (None, "", False) else [str(v)])
+
 # ---------- Public API ----------
 def run_format(cfg: dict, dry_run: bool = False) -> None:
     """
-    Beholder nøyaktig samme oppførsel som din nåværende kode:
-    - Respekterer format.prettier.enable + globs (kjører én kommando per glob)
-    - Respekterer format.black.enable + paths
-    - Respekterer format.ruff.enable + args
-    - Kaller whitespace-cleanup som før
-    Men med forbedret npx-oppslag (PATH, lokal, NVM og valgfri format.npx_path).
+    Beholder oppførselen din, men legger til støtte for:
+      - format.prettier.extra_args (liste)
+      - format.black.args (liste)
+      - format.ruff.args (liste): hvis satt, brukes den som “fasit”
     """
     fmt = cfg.get("format", {})
     rc = 0
@@ -401,30 +388,13 @@ def run_format(cfg: dict, dry_run: bool = False) -> None:
         return None
 
     danger = _danger_label(project_root)
-    allow_home = bool(fmt.get("allow_home", False))  # kan settes i format_config.json ved behov
+    allow_home = bool(fmt.get("allow_home", False))
     if danger and not allow_home:
         print(f"[format] Sikkerhet: project_root er {danger}. Avbryter for å unngå å formatere hele maskinen.")
         print(
-            "[format] Kjør med --project <mappe> (f.eks. --project ~/tools) eller sett format.allow_home=true i configs/format_config.json hvis du mener dette er riktig."
+            "[format] Kjør med --project <mappe> (f.eks. --project ~/tools) eller sett format.allow_home=true i configs/format_config.json."
         )
         return
-        # ---------- små hjelpere ----------
-
-    def _as_csv_string(v) -> str:
-        """Tillat både str ('a,b') og list(['a','b']); returnér 'a,b'."""
-        if isinstance(v, str):
-            return v.strip()
-        if isinstance(v, (list, tuple)):
-            return ",".join(str(x).strip() for x in v if str(x).strip())
-        return ""
-
-    def _as_list(v) -> list[str]:
-        """Tillat både str ('a,b') og list(['a','b']); returnér liste."""
-        if isinstance(v, (list, tuple)):
-            return [str(x).strip() for x in v if str(x).strip()]
-        if isinstance(v, str):
-            return [s.strip() for s in v.split(",") if s.strip()]
-        return []
 
     # ---------- Prettier ----------
     pr = fmt.get("prettier", {})
@@ -437,7 +407,7 @@ def run_format(cfg: dict, dry_run: bool = False) -> None:
 
             base_args = ["prettier", "--write", "--log-level", "warn"]
 
-            # map JSON → Prettier CLI (alle valg er valgfrie)
+            # “Ny” modell (valgfri)
             if pr.get("printWidth") is not None:
                 base_args += ["--print-width", str(int(pr["printWidth"]))]
             if pr.get("tabWidth") is not None:
@@ -449,13 +419,15 @@ def run_format(cfg: dict, dry_run: bool = False) -> None:
             if pr.get("trailingComma"):
                 base_args += ["--trailing-comma", str(pr["trailingComma"])]
 
-            # globs/ignores – kjør i ÉN kommando slik at '!' (negated globs) faktisk virker
-            globs = _as_list(pr.get("globs")) or ["**/*.{html,css,js,ts,tsx,json,yml,yaml,md}"]
-            ignores = _as_list(pr.get("ignore"))  # valgfri i JSON
-            # legg til sikre standard-negasjoner (macOS sine resource-fork filer)
-            ignores = (ignores or []) + ["!**/._*", "!**/.DS_Store"]
+            # Bakoverkompatibelt: ekstra args som i din config
+            for a in _as_list(pr.get("extra_args")):
+                base_args.append(a)
 
+            globs = _as_list(pr.get("globs")) or ["**/*.{html,css,js,ts,tsx,json,yml,yaml,md}"]
+            ignores = _as_list(pr.get("ignore"))
+            ignores = (ignores or []) + ["!**/._*", "!**/.DS_Store"]
             patterns = globs + ignores
+
             rc |= _run([npx_bin] + base_args + patterns, dry_run, cwd=project_root)
         else:
             print("[format] npx ikke funnet – hopper over prettier.")
@@ -465,14 +437,17 @@ def run_format(cfg: dict, dry_run: bool = False) -> None:
     if bl.get("enable", False):
         black_bin = _which_tool("black")
         cmd = [black_bin] if black_bin else [sys.executable, "-m", "black"]
+
+        # “Ny” modell (valgfri)
         if bl.get("line_length") is not None:
             cmd += ["--line-length", str(int(bl["line_length"]))]
-
-        # target kan være "py311" ELLER ["py311","py312"]
         tgt_csv = _as_csv_string(bl.get("target"))
         if tgt_csv:
             for tv in [t.strip() for t in tgt_csv.split(",") if t.strip()]:
                 cmd += ["--target-version", tv]
+
+        # Bakoverkompatibelt: args-liste
+        cmd += _as_list(bl.get("args"))
 
         paths = _as_list(bl.get("paths")) or ["./"]
         rc |= _run(cmd + paths, dry_run, cwd=project_root)
@@ -480,21 +455,24 @@ def run_format(cfg: dict, dry_run: bool = False) -> None:
     # ---------- Ruff ----------
     rf = fmt.get("ruff", {})
     if rf.get("enable", False):
-        args = ["check", "./"]
-        if rf.get("fix", True):
-            args.append("--fix")
-        if rf.get("unsafe_fixes", False):
-            args.append("--unsafe-fixes")
-        if rf.get("preview", False):
-            args.append("--preview")
-
-        # select/ignore kan være str eller liste
-        sel_csv = _as_csv_string(rf.get("select"))
-        ign_csv = _as_csv_string(rf.get("ignore"))
-        if sel_csv:
-            args += ["--select", sel_csv]
-        if ign_csv:
-            args += ["--ignore", ign_csv]
+        # Hvis eksplisitte args finnes i config, bruk dem (bakoverkompatibelt)
+        explicit_args = _as_list(rf.get("args"))
+        if explicit_args:
+            args = explicit_args
+        else:
+            args = ["check", "./"]
+            if rf.get("fix", True):
+                args.append("--fix")
+            if rf.get("unsafe_fixes", False):
+                args.append("--unsafe-fixes")
+            if rf.get("preview", False):
+                args.append("--preview")
+            sel_csv = _as_csv_string(rf.get("select"))
+            ign_csv = _as_csv_string(rf.get("ignore"))
+            if sel_csv:
+                args += ["--select", sel_csv]
+            if ign_csv:
+                args += ["--ignore", ign_csv]
 
         ruff_bin = _which_tool("ruff")
         if ruff_bin:
@@ -519,12 +497,6 @@ def _unified_diff_str(before: str, after: str, rel: str) -> str:
     return "".join(diff)
 
 def format_preview(cfg: dict, rel_path: str) -> str:
-    """
-    Lag en best-effort diff-forhåndsvisning for én fil:
-    - Python: kjør 'black --diff' og 'ruff check --fix --diff'
-    - Cleanup: generer diff mot _cleanup_text
-    - Prettier: rapporter om filen ville blitt endret (via --check), men vis ikke diff (Prettier har ingen --diff)
-    """
     fmt = cfg.get("format", {})
     project_root = Path(cfg.get("project_root", ".")).resolve()
     target = (project_root / rel_path).resolve()
@@ -540,17 +512,14 @@ def format_preview(cfg: dict, rel_path: str) -> str:
     ext = target.suffix.lower()
     dry = True
 
-    # --- Prettier: bare detekter endringer (ingen diff)
     pr = fmt.get("prettier", {})
     if pr.get("enable", False):
         npx_path, why = _find_npx(project_root, fmt)
         npx_bin = npx_path or _which_tool("npx") or shutil.which("npx")
         if npx_bin:
-            # sjekk om denne filen matches av globs
-            globs = pr.get("globs") or []
+            globs = _as_list(pr.get("globs")) or []
             matched = any(target.match(g.replace("**/", "**/*").replace("./", "")) or fnmatch.fnmatch(rel, g) for g in globs)
             if matched:
-                # prøv --check (0=ok, 1=vill endre)
                 rc = _run([npx_bin, "prettier", "--check", rel], dry, cwd=project_root)
                 if rc == 1:
                     out.append(f"[prettier] {rel}: ville bli endret (viser ikke diff)")
@@ -561,25 +530,19 @@ def format_preview(cfg: dict, rel_path: str) -> str:
         else:
             out.append("[prettier] npx ikke funnet – hopper over prettier-sjekk")
 
-    # --- Black diff (kun .py)
     bl = fmt.get("black", {})
     if bl.get("enable", False) and ext == ".py":
         black_bin = _which_tool("black")
         cmd = [black_bin] if black_bin else [sys.executable, "-m", "black"]
         cmd += ["--diff", rel]
         out.append(f"\n[black --diff] {rel}\n")
-        _run(cmd, dry, cwd=project_root)  # output går til stdout via _run()
+        _run(cmd, dry, cwd=project_root)
 
-    # --- Ruff diff (kun .py)
     rf = fmt.get("ruff", {})
     if rf.get("enable", False) and ext == ".py":
-        args = ["check", rel]
-        if rf.get("fix", True) or True:
-            args.append("--fix")
-        args.append("--diff")
+        args = ["check", rel, "--fix", "--diff"]
         if rf.get("preview", False):
             args.append("--preview")
-        # select/ignore (komma/separerte)
         sel = (rf.get("select") or "").strip()
         ign = (rf.get("ignore") or "").strip()
         if sel:
@@ -593,7 +556,6 @@ def format_preview(cfg: dict, rel_path: str) -> str:
         else:
             _run([sys.executable, "-m", "ruff"] + args, dry, cwd=project_root)
 
-    # --- Cleanup diff (alle tekstfiler som er i scope)
     cln = fmt.get("cleanup", {}) or {}
     if cln.get("enable", False):
         try:

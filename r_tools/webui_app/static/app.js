@@ -1146,9 +1146,8 @@ document.getElementById('run_gh').onclick = () =>
         },
       },
       'out_gh'
-    );
-  });
-
+    )
+  })
 
 if (document.getElementById('run_backup')) {
   document.getElementById('run_backup').onclick = () =>
@@ -1235,7 +1234,7 @@ async function loadFormatFromConfig(preferPrefs = true) {
   _setVal('fmt_black_enable', bl.enable, true)
   _setVal('fmt_black_paths', Array.isArray(bl.paths) ? bl.paths.join(',') : bl.paths)
   _setVal('fmt_black_line_length', bl.line_length)
-  _setVal('fmt_black_target', bl.target)
+  _setVal('fmt_black_target', Array.isArray(bl.target_version) ? bl.target_version.join(',') : bl.target_version)
   // Ruff
   const rf = f.ruff || {}
   _setVal('fmt_ruff_enable', rf.enable, true)

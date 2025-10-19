@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, Tuple, List, Dict
 
 # Katalogmål som typisk kan fjernes
-_DIR_TARGETS: Dict[str, set[str]] = {
+_DIR_TARGETS: dict[str, set[str]] = {
     "pycache": {"__pycache__"},
     "pytest_cache": {".pytest_cache"},
     "mypy_cache": {".mypy_cache"},
@@ -18,7 +18,7 @@ _DIR_TARGETS: Dict[str, set[str]] = {
 }
 
 # Filmønstre per mål
-_FILE_PATTERNS: Dict[str, List[str]] = {
+_FILE_PATTERNS: dict[str, list[str]] = {
     "coverage": [".coverage", ".coverage.*"],
     "editor": ["*~", ".*.swp", ".*.swo", "*.tmp", "*.bak"],
     "ds_store": [".DS_Store"],
@@ -50,8 +50,8 @@ def _is_inside_venv(path: Path) -> bool:
         # Vern ved tvil (heller falsk positiv enn å slette for mye)
         return True
 
-def _normalize_excludes_to_skip_globs(dirs: List[str], files: List[str]) -> List[str]:
-    skip: List[str] = []
+def _normalize_excludes_to_skip_globs(dirs: list[str], files: list[str]) -> list[str]:
+    skip: list[str] = []
     for d in dirs or []:
         d = d.strip("/").rstrip("/")
         if d:
@@ -69,7 +69,7 @@ def _normalize_excludes_to_skip_globs(dirs: List[str], files: List[str]) -> List
             unique.append(s)
     return unique
 
-def _should_skip_by_globs(root: Path, path: Path, skip_globs: List[str]) -> bool:
+def _should_skip_by_globs(root: Path, path: Path, skip_globs: list[str]) -> bool:
     for pat in skip_globs or []:
         # Forenklet (yter bra nok for prosjektstørrelser her)
         for m in root.glob(pat):
@@ -83,13 +83,13 @@ def _should_skip_by_globs(root: Path, path: Path, skip_globs: List[str]) -> bool
 
 def _gather_targets(
     root: Path,
-    enabled: Dict[str, bool],
-    extra_globs: List[str],
-    skip_globs: List[str],
-    only: List[str] | None,
-    skip: List[str] | None,
+    enabled: dict[str, bool],
+    extra_globs: list[str],
+    skip_globs: list[str],
+    only: list[str] | None,
+    skip: list[str] | None,
     allow_venv_clean: bool,
-) -> Tuple[List[Path], List[Path]]:
+) -> tuple[list[Path], list[Path]]:
     only_set = set(only or [])
     skip_set = set(skip or [])
 
@@ -100,10 +100,10 @@ def _gather_targets(
             return False
         return bool(enabled.get(key, False))
 
-    del_dirs: List[Path] = []
-    del_files: List[Path] = []
+    del_dirs: list[Path] = []
+    del_files: list[Path] = []
 
-    def protect_env_dirs(dirnames: List[str]) -> None:
+    def protect_env_dirs(dirnames: list[str]) -> None:
         if not allow_venv_clean:
             for protected in list(dirnames):
                 if protected in _PROTECTED_ENV_DIRS:
@@ -159,7 +159,7 @@ def _gather_targets(
 
     return del_dirs, del_files
 
-def run_clean(cfg: dict, only: List[str] | None, skip: List[str], dry_run: bool = True) -> None:
+def run_clean(cfg: dict, only: list[str] | None, skip: list[str], dry_run: bool = True) -> None:
     """
     Konfig (utdrag):
     {
@@ -197,8 +197,8 @@ def run_clean(cfg: dict, only: List[str] | None, skip: List[str], dry_run: bool 
         return
 
     enabled = dict(c.get("targets", {}))
-    extra_globs: List[str] = list(c.get("extra_globs", []))
-    skip_globs: List[str] = list(c.get("skip_globs", []))
+    extra_globs: list[str] = list(c.get("extra_globs", []))
+    skip_globs: list[str] = list(c.get("skip_globs", []))
 
     # Lokale excl.
     clean_excl_dirs = list(c.get("exclude_dirs", []))
