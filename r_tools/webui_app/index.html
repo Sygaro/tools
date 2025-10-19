@@ -29,8 +29,6 @@
         <button class="tab" data-tool="backup">Backup</button>
         <button class="tab" data-tool="git">Git</button>
         <button class="tab" data-tool="settings">Settings</button>
-
-
       </div>
       <!-- Oppskrifter -->
       <div class="recipes" id="recipes_box">
@@ -45,7 +43,6 @@
     </header>
     <main>
       <div class="row">
-       
 
         <!-- SEARCH -->
         <section class="card tool tool-search" data-tool="search">
@@ -472,140 +469,131 @@
         </section>
 
         <!-- GIT -->
-<section class="card tool tool-git" data-tool="git">
-  <div class="tool-header">
-    <div class="tool-title">Git <span class="lamp" id="status_git"></span></div>
-    <div class="tool-actions">
-      <button class="btn" id="git_status" title="git status -sb">Status</button>
-      <button class="btn" id="git_sync" title="fetch + pull --ff-only">Sync</button>
-      <button class="btn" id="git_diff" title="Vis diff">Diff</button>
-      <button class="btn" id="git_log" title="Kort logg">Log</button>
-      <button class="btn help-toggle" data-help-for="git">Hjelp</button>
-      <button class="btn" id="git_resolve" title="Vis hjelp ved merge-konflikt">Resolve help</button>
-    </div>
-  </div>
-  <div class="tool-body">
-    <div class="grid two">
-      <label>Remote
-        <select id="git_remote"></select>
-      </label>
-      <label>Branch
-        <select id="git_branch"></select>
-      </label>
-    </div>
+        <section class="card tool tool-git" data-tool="git">
+          <div class="tool-header">
+            <div class="tool-title">Git <span class="lamp" id="status_git"></span></div>
+            <div class="tool-actions">
+              <button class="btn" id="git_status" title="git status -sb">Status</button>
+              <button class="btn" id="git_sync" title="fetch + pull --ff-only">Sync</button>
+              <button class="btn" id="git_diff" title="Vis diff">Diff</button>
+              <button class="btn" id="git_log" title="Kort logg">Log</button>
+              <button class="btn help-toggle" data-help-for="git">Hjelp</button>
+              <button class="btn" id="git_resolve" title="Vis hjelp ved merge-konflikt">Resolve help</button>
+            </div>
+          </div>
+          <div class="tool-body">
+            <div class="grid two">
+              <label>Remote
+                <select id="git_remote"></select>
+              </label>
+              <label>Branch
+                <select id="git_branch"></select>
+              </label>
+            </div>
 
-    <div class="inline" style="margin-top:8px">
-      <button class="btn" id="git_switch" title="Bytt til valgt branch">Switch</button>
-      <button class="btn" id="git_stash_switch" title="Stash + switch til valgt branch">Stash &amp; switch</button>
-      <button class="btn" id="git_push" title="Push valgt branch">Push</button>
-      <button class="btn" id="git_merge_main" title="Merge valgt branch → main (ff-only)">Merge → main</button>
-      <label class="inline" title="Må krysses av for å pushe/merge til beskyttede branched (f.eks. main).">
-        <input type="checkbox" id="git_confirm" />
-        Bekreft beskyttet branch
-      </label>
-    </div>
+            <div class="inline" style="margin-top:8px">
+              <button class="btn" id="git_switch" title="Bytt til valgt branch">Switch</button>
+              <button class="btn" id="git_stash_switch" title="Stash + switch til valgt branch">Stash &amp; switch</button>
+              <button class="btn" id="git_push" title="Push valgt branch">Push</button>
+              <button class="btn" id="git_merge_main" title="Merge valgt branch → main (ff-only)">Merge → main</button>
+              <label class="inline" title="Må krysses av for å pushe/merge til beskyttede branched (f.eks. main).">
+                <input type="checkbox" id="git_confirm" />
+                Bekreft beskyttet branch
+              </label>
+            </div>
 
-    <div class="grid two" style="margin-top:12px">
-      <label>Ny branch
-        <input id="git_newbranch" type="text" placeholder="feature/my-branch" />
-      </label>
-      <label>Base
-        <input id="git_base" type="text" placeholder="main" />
-      </label>
-      <button class="btn" id="git_create" title="Opprett og bytt til ny branch">Create</button>
-    </div>
+            <div class="grid two" style="margin-top:12px">
+              <label>Ny branch
+                <input id="git_newbranch" type="text" placeholder="feature/my-branch" />
+              </label>
+              <label>Base
+                <input id="git_base" type="text" placeholder="main" />
+              </label>
+              <button class="btn" id="git_create" title="Opprett og bytt til ny branch">Create</button>
+            </div>
 
-    <div class="grid two" style="margin-top:12px">
-      <label class="grow">Commit-melding
-        <input id="git_message" type="text" placeholder="Kort, beskrivende commit-melding" />
-      </label>
-      <div class="inline" style="gap: 10px; align-items:center;">
-        <label class="inline" title="Sjekk Black/Ruff (og ev. tester) før push.">
-          <input type="checkbox" id="git_precheck" />
-          Pre-push sjekk
-        </label>
-        <label class="inline" title="Inkluder pytest -q i pre-push sjekk.">
-          <input type="checkbox" id="git_precheck_tests" />
-          Inkl. tester
-        </label>
-        <button class="btn" id="git_acp" title="git add -A; commit; (precheck); push; status">ACP</button>
-      </div>
-    </div>
+            <div class="grid two" style="margin-top:12px">
+              <label class="grow">Commit-melding
+                <input id="git_message" type="text" placeholder="Kort, beskrivende commit-melding" />
+              </label>
+              <div class="inline" style="gap: 10px; align-items:center;">
+                <label class="inline" title="Sjekk Black/Ruff (og ev. tester) før push.">
+                  <input type="checkbox" id="git_precheck" />
+                  Pre-push sjekk
+                </label>
+                <label class="inline" title="Inkluder pytest -q i pre-push sjekk.">
+                  <input type="checkbox" id="git_precheck_tests" />
+                  Inkl. tester
+                </label>
+                <button class="btn" id="git_acp" title="git add -A; commit; (precheck); push; status">ACP</button>
+              </div>
+            </div>
 
-    <div class="inline" style="margin-top:8px">
-      <label class="inline" title="Hvis krysset av, vises diff for indekserte (staged) filer.">
-        <input type="checkbox" id="git_staged" />
-        Diff (staged)
-      </label>
-      <label style="margin-left:16px">Logg: siste
-        <input id="git_log_n" type="number" min="1" value="10" style="width:6rem" />
-        commits
-      </label>
-    </div>
+            <div class="inline" style="margin-top:8px">
+              <label class="inline" title="Hvis krysset av, vises diff for indekserte (staged) filer.">
+                <input type="checkbox" id="git_staged" />
+                Diff (staged)
+              </label>
+              <label style="margin-left:16px">Logg: siste
+                <input id="git_log_n" type="number" min="1" value="10" style="width:6rem" />
+                commits
+              </label>
+            </div>
 
-    <textarea id="out_git" class="output" rows="18" placeholder="Git-output vises her …" readonly></textarea>
-  </div>
-</section>
+            <textarea id="out_git" class="output" rows="18" placeholder="Git-output vises her …" readonly></textarea>
+          </div>
+        </section>
 
-<!-- NEW: static help panel for Git (RIGHT column) -->
-<aside class="card help-panel" data-help-for="git">
-  <div class="tool-header">
-    <div class="tool-title">Hjelp: Git-verktøyet</div>
-    <div class="tool-actions">
-      <button class="btn help-toggle" data-help-for="git" title="Skjul">Skjul</button>
-    </div>
-  </div>
-  <div class="tool-body">
-    <h3>Hva gjør knappene?</h3>
-    <ul class="help-list">
-      <li><b>Status</b> — viser <code>git status -sb</code>.</li>
-      <li><b>Sync</b> — <code>git fetch</code> & <code>git pull --ff-only &lt;remote&gt; &lt;branch&gt;</code> for valgt branch.</li>
-      <li><b>Diff</b> — viser <code>git diff</code>. Kryss av «Diff (staged)» for <code>git diff --cached</code>.</li>
-      <li><b>Log</b> — viser <code>git log -N --oneline --graph --decorate</code> (N styres av «Logg: siste»).</li>
-      <li><b>Switch</b> — bytt til valgt branch (<code>git switch</code>).</li>
-      <li><b>Stash & switch</b> — kjører <code>git stash push -u</code> (med melding) og deretter <code>git switch</code> til valgt branch.</li>
-      <li><b>Push</b> — <code>git push &lt;remote&gt; &lt;branch&gt;</code>. Stopper på beskyttet branch uten «Bekreft beskyttet branch».</li>
-      <li><b>Create</b> — oppretter ny branch fra «Base» og bytter til den (<code>git switch -c &lt;ny&gt; &lt;base&gt;</code>).</li>
-      <li><b>ACP</b> — Add + Commit + (Pre-push sjekk?) + Push + Status.<br/>
-        Sekvens: <code>git add -A → git commit -m "&lt;...&gt;" →</code> (valgfri sjekk) <code>→ git push → git status -sb</code>.
-      </li>
-      <li><b>Merge → main</b> — bytter til <code>main</code> og kjører <code>git merge --ff-only &lt;kilde&gt;</code>.
-        Krever «Bekreft beskyttet branch» for å beskytte <code>main/master/release/*</code>.
-      </li>
-      <li><b>Resolve help</b> — viser tips ved konflikt og en veiviser for å løse/avbryte en merge.</li>
-    </ul>
+        <!-- HJELP (kun for Git) -->
+        <aside class="card help-panel" data-help-for="git">
+          <div class="tool-header">
+            <div class="tool-title">Hjelp: Git-verktøyet</div>
+            <div class="tool-actions">
+              <button class="btn help-toggle" data-help-for="git" title="Skjul">Skjul</button>
+            </div>
+          </div>
+          <div class="tool-body">
+            <h3>Hva gjør knappene?</h3>
+            <ul class="help-list">
+              <li><b>Status</b> — viser <code>git status -sb</code>.</li>
+              <li><b>Sync</b> — <code>git fetch</code> &amp; <code>git pull --ff-only &lt;remote&gt; &lt;branch&gt;</code> for valgt branch.</li>
+              <li><b>Diff</b> — viser <code>git diff</code>. Kryss av «Diff (staged)» for <code>git diff --cached</code>.</li>
+              <li><b>Log</b> — viser <code>git log -N --oneline --graph --decorate</code> (N styres av «Logg: siste»).</li>
+              <li><b>Switch</b> — bytt til valgt branch (<code>git switch</code>).</li>
+              <li><b>Stash &amp; switch</b> — <code>git stash push -u</code> (med melding) → <code>git switch</code> til valgt branch.</li>
+              <li><b>Push</b> — <code>git push &lt;remote&gt; &lt;branch&gt;</code>. Stopper på beskyttet branch uten «Bekreft beskyttet branch».</li>
+              <li><b>Create</b> — ny branch fra «Base» og bytt til den (<code>git switch -c &lt;ny&gt; &lt;base&gt;</code>).</li>
+              <li><b>ACP</b> — Add + Commit + (Pre-push sjekk?) + Push + Status.<br/>
+                Sekvens: <code>git add -A → git commit -m "&lt;...&gt;" →</code> (valgfri sjekk) <code>→ git push → git status -sb</code>.
+              </li>
+              <li><b>Merge → main</b> — bytter til <code>main</code> og kjører <code>git merge --ff-only &lt;kilde&gt;</code>.
+                Krever «Bekreft beskyttet branch» for å beskytte <code>main/master/release/*</code>.
+              </li>
+              <li><b>Resolve help</b> — viser tips ved konflikt og en veiviser for å løse/avbryte en merge.</li>
+            </ul>
 
-    <h3>Beskyttelse av branches</h3>
-    <p>
-      Verktøyet beskytter <code>base</code>-branchen(e) og mønstre fra <code>configs/git_config.json</code>.
-    </p>
-    <pre class="help-pre">
-{
+            <h3>Beskyttelse av branches</h3>
+            <p>Verktøyet beskytter <code>base</code>-branchen(e) og mønstre fra <code>configs/git_config.json</code>:</p>
+<pre class="help-pre">{
   "git": {
     "default_remote": "origin",
     "default_base": "main",
     "protected_branches": ["main","master","release/*"]
   }
-}
-    </pre>
-    <p class="muted">
-      Tips: For <code>release/*</code> tolkes glob riktig. Push/Merge stopper med advarsel uten eksplisitt bekreftelse.
-    </p>
+}</pre>
+            <p class="muted">For <code>release/*</code> tolkes glob riktig. Push/Merge stopper uten eksplisitt bekreftelse.</p>
 
-    <h3>Trygg «Merge → main» (anbefalt flyt)</h3>
-    <ol>
-      <li>Velg feature-branch i «Branch».</li>
-      <li>Klikk <b>Sync</b> for å hente siste endringer fra remote.</li>
-      <li>Klikk <b>Diff</b> og/eller <b>Log</b> for kontroll.</li>
-      <li>Huk av <b>Bekreft beskyttet branch</b>.</li>
-      <li>Klikk <b>Merge → main</b>. Ved konflikt, bruk <b>Resolve help</b>.</li>
-      <li>Kjør ev. <b>Push</b> fra <code>main</code>.</li>
-    </ol>
-  </div>
-</aside>
-
-
-
+            <h3>Trygg «Merge → main» (anbefalt flyt)</h3>
+            <ol>
+              <li>Velg feature-branch i «Branch».</li>
+              <li>Klikk <b>Sync</b> for å hente siste.</li>
+              <li>Klikk <b>Diff</b> og/eller <b>Log</b> for kontroll.</li>
+              <li>Huk av <b>Bekreft beskyttet branch</b>.</li>
+              <li>Klikk <b>Merge → main</b>. Ved konflikt, bruk <b>Resolve help</b>.</li>
+              <li>Kjør ev. <b>Push</b> fra <code>main</code>.</li>
+            </ol>
+          </div>
+        </aside>
 
         <!-- SETTINGS -->
         <section class="card tool tool-settings" data-tool="settings">

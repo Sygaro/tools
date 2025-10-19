@@ -12,6 +12,7 @@ const STATUS_IDS = {
   backup: 'status_backup',
   git: 'status_git',
 };
+
 function setLamp(id, state) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -30,23 +31,24 @@ function setGlobalStatus(state, label) {
   const lab = document.getElementById('status_label');
   if (lab) lab.textContent = label || '(ingen)';
 }
+
 /* Tabs */
 function setActiveTool(name) {
   TOOLS.forEach((t) => {
     const sec = document.querySelector(`.tool[data-tool="${t}"]`);
     const tab = document.querySelector(`.tab[data-tool="${t}"]`);
     if (sec) sec.classList.toggle('active', t === name);
-   if (tab) tab.classList.toggle('active', t === name);
-});
-localStorage.setItem(ACTIVE_TOOL_KEY, name);
+    if (tab) tab.classList.toggle('active', t === name);
+  });
+  localStorage.setItem(ACTIVE_TOOL_KEY, name);
 }
-
 document.getElementById('tabs').addEventListener('click', (e) => {
   const btn = e.target.closest('.tab');
   if (!btn) return;
   const tool = btn.getAttribute('data-tool');
   setActiveTool(tool);
 });
+
 /* Status-wrapper */
 async function withStatus(key, outId, fn) {
   if (key) setStatus(key, 'busy');
@@ -65,6 +67,8 @@ async function withStatus(key, outId, fn) {
     throw e;
   }
 }
+
+/* Git: remotes/branches */
 async function fetchGitRemotes() {
   const proj = currentProject();
   const r = await fetch('/api/git/remotes?project=' + encodeURIComponent(proj));
@@ -79,7 +83,6 @@ async function fetchGitRemotes() {
   });
   if (!sel.value && sel.options.length) sel.value = sel.options[0].value;
 }
-
 async function fetchGitBranches(selectValueIfPresent) {
   const proj = currentProject();
   const r = await fetch('/api/git/branches?project=' + encodeURIComponent(proj));
@@ -93,15 +96,10 @@ async function fetchGitBranches(selectValueIfPresent) {
     o.textContent = name === d.current ? `${name} (current)` : name;
     sel.appendChild(o);
   });
-  // sett valgt verdi
   const want = selectValueIfPresent || d.current;
-  if (want && [...sel.options].some(o => o.value === want)) {
-    sel.value = want;
-  } else if (sel.options.length) {
-    sel.value = sel.options[0].value;
-  }
+  if (want && [...sel.options].some(o => o.value === want)) sel.value = want;
+  else if (sel.options.length) sel.value = sel.options[0].value;
 }
-
 
 /* Oppskrifter dropdown */
 async function fetchRecipes() {
@@ -135,33 +133,30 @@ async function fetchRecipes() {
     pop.appendChild(p);
   }
 }
-// Quick status
+
+/* Git actions */
 const elGitStatus = document.getElementById('git_status');
 if (elGitStatus) elGitStatus.onclick = () =>
   withStatus('git','out_git', async () =>
     runTool('git', { args: { action:'status' } }, 'out_git'));
 
-// Quick sync (fetch + pull --ff-only)
 const elGitSync = document.getElementById('git_sync');
 if (elGitSync) elGitSync.onclick = () =>
   withStatus('git','out_git', async () => {
     const branch = document.getElementById('git_branch')?.value;
     const remote = document.getElementById('git_remote')?.value || 'origin';
-    const res = await runTool('git', { args: { action:'sync', branch, remote } }, 'out_git');
-    return res;
+    return runTool('git', { args: { action:'sync', branch, remote } }, 'out_git');
   });
 
-// Switch
 const elGitSwitch = document.getElementById('git_switch');
 if (elGitSwitch) elGitSwitch.onclick = () =>
   withStatus('git','out_git', async () => {
     const branch = document.getElementById('git_branch')?.value;
     const res = await runTool('git', { args: { action:'switch', branch } }, 'out_git');
-    await fetchGitBranches(); // oppdater valget/markering
+    await fetchGitBranches();
     return res;
   });
 
-// Stash & switch
 const elGitStashSwitch = document.getElementById('git_stash_switch');
 if (elGitStashSwitch) elGitStashSwitch.onclick = () =>
   withStatus('git','out_git', async () => {
@@ -171,22 +166,16 @@ if (elGitStashSwitch) elGitStashSwitch.onclick = () =>
     return res;
   });
 
-// Create
 const elGitCreate = document.getElementById('git_create');
 if (elGitCreate) elGitCreate.onclick = () =>
   withStatus('git','out_git', async () => {
     const branch = document.getElementById('git_newbranch')?.value.trim();
     const base = document.getElementById('git_base')?.value.trim();
     const res = await runTool('git', { args: { action:'create', branch, base } }, 'out_git');
-    await fetchGitBranches();
-    if (branch) {
-      const sel = document.getElementById('git_branch');
-      if (sel) sel.value = branch;
-    }
+    await fetchGitBranches(branch);
     return res;
   });
 
-// Merge → main
 const elGitMergeMain = document.getElementById('git_merge_main');
 if (elGitMergeMain) elGitMergeMain.onclick = () =>
   withStatus('git','out_git', async () => {
@@ -194,14 +183,10 @@ if (elGitMergeMain) elGitMergeMain.onclick = () =>
     const target = 'main';
     const confirmProtected = document.getElementById('git_confirm')?.checked || false;
     const res = await runTool('git', { args: { action:'merge', source, target, confirm: confirmProtected } }, 'out_git');
-    // Etter merge: bytt dropdown og oppdater status
-    await fetchGitBranches();
-    const sel = document.getElementById('git_branch');
-    if (sel) sel.value = target;
+    await fetchGitBranches(target);
     return res;
   });
 
-// Push
 const elGitPush = document.getElementById('git_push');
 if (elGitPush) elGitPush.onclick = () =>
   withStatus('git','out_git', async () => {
@@ -213,7 +198,6 @@ if (elGitPush) elGitPush.onclick = () =>
     return runTool('git', { args: { action:'push', branch, remote, confirm: confirmProtected, precheck, precheck_tests } }, 'out_git');
   });
 
-// ACP
 const elGitAcp = document.getElementById('git_acp');
 if (elGitAcp) elGitAcp.onclick = () =>
   withStatus('git','out_git', async () => {
@@ -226,7 +210,6 @@ if (elGitAcp) elGitAcp.onclick = () =>
     return runTool('git', { args: { action:'acp', branch, remote, message: msg, confirm: confirmProtected, precheck, precheck_tests } }, 'out_git');
   });
 
-// Diff
 const elGitDiff = document.getElementById('git_diff');
 if (elGitDiff) elGitDiff.onclick = () =>
   withStatus('git','out_git', async () => {
@@ -234,7 +217,6 @@ if (elGitDiff) elGitDiff.onclick = () =>
     return runTool('git', { args: { action:'diff', staged } }, 'out_git');
   });
 
-// Log
 const elGitLog = document.getElementById('git_log');
 if (elGitLog) elGitLog.onclick = () =>
   withStatus('git','out_git', async () => {
@@ -242,19 +224,18 @@ if (elGitLog) elGitLog.onclick = () =>
     return runTool('git', { args: { action:'log', n } }, 'out_git');
   });
 
-// Resolve helper
 const elGitResolve = document.getElementById('git_resolve');
 if (elGitResolve) elGitResolve.onclick = () =>
   withStatus('git','out_git', async () =>
     runTool('git', { args: { action:'resolve' } }, 'out_git'));
 
-
-
+/* Oppskrifter UI */
 document.getElementById('recipes_toggle').onclick = (e) => {
   e.stopPropagation();
   document.getElementById('recipes_pop').classList.toggle('show');
 };
 document.addEventListener('click', () => document.getElementById('recipes_pop').classList.remove('show'));
+
 /* Hjelpere */
 function currentProject() {
   return document.getElementById('project').value;
@@ -272,12 +253,14 @@ function guessOutputTarget(tool) {
             ? 'out_clean'
             : tool === 'backup'
               ? 'out_backup'
-              : tool === 'git'          
+              : tool === 'git'
                 ? 'out_git'
                 : tool === 'settings'
                   ? 'out_settings'
                   : 'out_gh';
 }
+
+/* Prefs save/load */
 function savePrefs() {
   const proj = currentProject();
   if (!proj) return;
@@ -408,6 +391,7 @@ function loadPrefs() {
     set('rep_exclude', p.rep_exclude);
   } catch {}
 }
+
 /* Serverkall */
 async function runTool(tool, payload, outId) {
   payload = payload || {};
@@ -424,6 +408,8 @@ async function runTool(tool, payload, outId) {
   if (target) target.value = (data.output || data.error || '').trim();
   return data;
 }
+
+/* Prosjekter og config */
 async function fetchProjects() {
   const r = await fetch('/api/projects');
   const data = await r.json();
@@ -449,15 +435,10 @@ async function fetchProjects() {
     sel.appendChild(opt);
     if (p.exists && !firstValid) firstValid = p.abs_path;
   });
-  const s = await fetch('/api/settings')
-    .then((r) => r.json())
-    .catch(() => ({ global: {} }));
+  const s = await fetch('/api/settings').then((r) => r.json()).catch(() => ({ global: {} }));
   const defaultProj = s?.global?.default_project || '';
-  if (defaultProj && projs.some((p) => p.abs_path === defaultProj)) {
-    sel.value = defaultProj;
-  } else {
-    sel.value = firstValid || projs[0]?.abs_path || '';
-  }
+  if (defaultProj && projs.some((p) => p.abs_path === defaultProj)) sel.value = defaultProj;
+  else sel.value = firstValid || projs[0]?.abs_path || '';
   if (projs.length && projs.every((p) => !p.exists)) {
     alert(['Ingen av prosjektene i projects_config.json finnes på disk.', '', 'Sjekk stiene.'].join('\n'));
   }
@@ -521,6 +502,7 @@ async function fetchBackupProfiles() {
   });
   sel.value = '';
 }
+
 /* Clean-hjelpere */
 function currentCleanMode() {
   const dry = document.getElementById('clean_mode_dry').checked;
@@ -540,12 +522,12 @@ function collectCleanTargets() {
   });
   return t;
 }
-/* Settings (globals + JSON config-editor) */
+
+/* Settings (globals + JSON editor) */
 async function loadSettings() {
   const data = await fetch('/api/settings').then((r) => r.json());
   const selProj = document.getElementById('set_default_project');
   selProj.innerHTML = '';
-  // kopier prosjektlisten
   const projSel = document.getElementById('project');
   Array.from(projSel.options).forEach((opt) => {
     const o = document.createElement('option');
@@ -557,7 +539,6 @@ async function loadSettings() {
   document.getElementById('set_default_tool').value = data.global?.default_tool || '';
   document.getElementById('set_backup_script').value = (data.backup && data.backup.script) || '';
   document.getElementById('settings_cfgdir').textContent = data.config_dir || '';
-  // last config-fil-liste for JSON-editor
   await cfgList();
 }
 async function cfgList() {
@@ -618,82 +599,58 @@ async function cfgSave() {
   if (d.ok) setLamp('status_settings', 'ok');
   else setLamp('status_settings', 'err');
 }
+
 /* ---------- FORMAT UI <-> JSON ---------- */
 function _linesToList(id) {
   const el = document.getElementById(id);
   if (!el) return [];
-  return el.value
-    .split(/\r?\n/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+  return el.value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
 }
-function _listToLines(arr) {
-  return (arr || []).join('\n');
-}
-function _csvToList(s) {
-  return (s || '')
-    .split(/[,\s]+/)
-    .map((x) => x.trim())
-    .filter(Boolean);
-}
-function _listToCsv(arr) {
-  return (arr || []).join(',');
-}
+function _listToLines(arr) { return (arr || []).join('\n'); }
+function _csvToList(s) { return (s || '').split(/[,\s]+/).map((x) => x.trim()).filter(Boolean); }
+function _listToCsv(arr) { return (arr || []).join(','); }
+
 /* Les format-config fra server og sett felter i UI */
 async function loadFormatUIFromConfig() {
   try {
     const r = await fetch('/api/config?name=' + encodeURIComponent('format_config.json'));
     const d = await r.json();
-    if (!d.content) return; // fil finnes ikke, hopp
+    if (!d.content) return;
     const cfg = JSON.parse(d.content);
     const fmt = cfg.format || {};
-    // --- Prettier ---
+    // Prettier
     const pr = fmt.prettier || {};
-    document.getElementById('fmt_prettier_enable')?.setAttribute('checked', pr.enable ? 'checked' : '');
     document.getElementById('fmt_prettier_enable').checked = !!pr.enable;
     document.getElementById('fmt_prettier_globs').value = _listToLines(pr.globs || []);
-    // Lese ut fra extra_args tilbake til feltene
     const extra = pr.extra_args || [];
-    const getArg = (key) => {
-      const i = extra.indexOf(key);
-      return i >= 0 ? extra[i + 1] : null;
-    };
+    const getArg = (key) => { const i = extra.indexOf(key); return i >= 0 ? extra[i + 1] : null; };
     const has = (key) => extra.includes(key);
     document.getElementById('fmt_prettier_printWidth').value = getArg('--print-width') || '';
     document.getElementById('fmt_prettier_tabWidth').value = getArg('--tab-width') || '';
     document.getElementById('fmt_prettier_singleQuote').checked = has('--single-quote');
-    // semi: default true – i UI representerer checkbox "bruk semikolon"; vi oversetter til --no-semi når avkrysset = false
     document.getElementById('fmt_prettier_semi').checked = !has('--no-semi');
-    const tc = getArg('--trailing-comma') || '';
-    document.getElementById('fmt_prettier_trailingComma').value = tc;
-    // --- Black ---
+    document.getElementById('fmt_prettier_trailingComma').value = getArg('--trailing-comma') || '';
+    // Black
     const bl = fmt.black || {};
     document.getElementById('fmt_black_enable').checked = !!bl.enable;
     document.getElementById('fmt_black_paths').value = (bl.paths || []).join(', ');
     const blArgs = bl.args || [];
-    const blGet = (key) => {
-      const i = blArgs.indexOf(key);
-      return i >= 0 ? blArgs[i + 1] : null;
-    };
+    const blGet = (key) => { const i = blArgs.indexOf(key); return i >= 0 ? blArgs[i + 1] : null; };
     document.getElementById('fmt_black_line_length').value = blGet('--line-length') || '';
     document.getElementById('fmt_black_target').value = blGet('--target-version') || '';
-    // --- Ruff ---
+    // Ruff
     const rf = fmt.ruff || {};
     document.getElementById('fmt_ruff_enable').checked = !!rf.enable;
     const rfArgs = rf.args || [];
     const rfHas = (key) => rfArgs.includes(key);
-    const rfGet = (key) => {
-      const i = rfArgs.indexOf(key);
-      return i >= 0 ? rfArgs[i + 1] : null;
-    };
+    const rfGet = (key) => { const i = rfArgs.indexOf(key); return i >= 0 ? rfArgs[i + 1] : null; };
     document.getElementById('fmt_ruff_fix').checked = rfHas('--fix');
     document.getElementById('fmt_ruff_unsafe').checked = rfHas('--unsafe-fixes');
     document.getElementById('fmt_ruff_preview').checked = rfHas('--preview');
-    const sel = rfGet('--select'); // komma-separert
-    const ign = rfGet('--ignore');
+    const sel = rfGet('--select'); const ign = rfGet('--ignore');
     document.getElementById('fmt_ruff_select').value = sel ? sel.split(',').join('\n') : '';
     document.getElementById('fmt_ruff_ignore').value = ign ? ign.split(',').join('\n') : '';
-    // --- Cleanup ---
+    // Cleanup
     const cl = fmt.cleanup || {};
     document.getElementById('fmt_cleanup_enable').checked = !!cl.enable;
     document.getElementById('fmt_cleanup_compact').checked = !!cl.compact_blocks;
@@ -704,9 +661,9 @@ async function loadFormatUIFromConfig() {
     console.warn('[format] Kunne ikke laste format_config.json:', e);
   }
 }
-/* Samle UI → format-config (samme struktur som CLI/UI deler) */
+
+/* Samle UI → format-config (felles struktur) */
 function gatherFormatUIToConfig() {
-  // --- Prettier ---
   const extra = [];
   const pw = document.getElementById('fmt_prettier_printWidth').value.trim();
   if (pw) extra.push('--print-width', pw);
@@ -721,7 +678,7 @@ function gatherFormatUIToConfig() {
     globs: _linesToList('fmt_prettier_globs'),
     extra_args: extra,
   };
-  // --- Black ---
+
   const blArgs = [];
   const blLL = document.getElementById('fmt_black_line_length').value.trim();
   if (blLL) blArgs.push('--line-length', blLL);
@@ -729,13 +686,10 @@ function gatherFormatUIToConfig() {
   if (blTarget) blArgs.push('--target-version', blTarget);
   const black = {
     enable: document.getElementById('fmt_black_enable').checked,
-    paths: (document.getElementById('fmt_black_paths').value || './')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean),
+    paths: (document.getElementById('fmt_black_paths').value || './').split(',').map((s) => s.trim()).filter(Boolean),
     args: blArgs,
   };
-  // --- Ruff ---
+
   const args = ['check', './'];
   if (document.getElementById('fmt_ruff_fix').checked) args.push('--fix');
   if (document.getElementById('fmt_ruff_unsafe').checked) args.push('--unsafe-fixes');
@@ -744,22 +698,21 @@ function gatherFormatUIToConfig() {
   const ign = _linesToList('fmt_ruff_ignore');
   if (sel.length) args.push('--select', sel.join(','));
   if (ign.length) args.push('--ignore', ign.join(','));
-  const ruff = {
-    enable: document.getElementById('fmt_ruff_enable').checked,
-    args,
-  };
-  // --- Cleanup ---
+  const ruff = { enable: document.getElementById('fmt_ruff_enable').checked, args };
+
   const cleanup = {
     enable: document.getElementById('fmt_cleanup_enable').checked,
     compact_blocks: document.getElementById('fmt_cleanup_compact').checked,
     max_consecutive_blanks: parseInt(document.getElementById('fmt_cleanup_maxblank').value || '0', 10),
     exts: _linesToList('fmt_cleanup_exts'),
     exclude_exts: _linesToList('fmt_cleanup_excl_exts'),
-    paths: [], // kan fylles på senere ved behov
+    paths: [],
   };
+
   return { format: { prettier, black, ruff, cleanup } };
 }
-/* Lagre til configs/format_config.json via API */
+
+/* Lagre format_config.json via API */
 async function saveFormatConfig() {
   const payload = gatherFormatUIToConfig();
   const body = { content: JSON.stringify(payload) };
@@ -769,12 +722,11 @@ async function saveFormatConfig() {
     body: JSON.stringify(body),
   });
   const d = await r.json();
-  if (!d.ok) {
-    alert('Klarte ikke å lagre format_config.json');
-    return;
-  }
-  alert('Lagret format_config.json');
+  if (!d.ok) alert('Klarte ikke å lagre format_config.json');
+  else alert('Lagret format_config.json');
 }
+
+/* Settings-knapper */
 document.getElementById('cfg_file').addEventListener('change', cfgLoad);
 document.getElementById('cfg_reload').onclick = cfgLoad;
 document.getElementById('cfg_format').onclick = cfgFormat;
@@ -784,12 +736,11 @@ document.getElementById('settings_diag').onclick = async (e) => {
   const dbg = await fetch('/api/debug-config').then((r) => r.json());
   document.getElementById('out_settings').value = JSON.stringify(dbg, null, 2);
 };
-/* --------- FORMAT summary renderer (viser CLI-aktig oppsummering i UI) --------- */
+
+/* FORMAT summary renderer */
 function renderFormatSummary(result) {
-  // prøv å finne / lage <pre id="fmt_summary">
   let box = document.getElementById('fmt_summary');
   if (!box) {
-    // hvis HTML ikke har den, lag en og plasser under out_format
     const out = document.getElementById('out_format');
     if (out && out.parentElement) {
       box = document.createElement('pre');
@@ -801,32 +752,25 @@ function renderFormatSummary(result) {
     }
   }
   if (!box) return;
-
   const s = (result && result.format_summary) || {};
   const pr = s.prettier || {};
   const rf = s.ruff || {};
   const cl = s.cleanup || {};
   const bk = s.black || {};
-
   const lines = [];
   lines.push(`Prettier: ${pr.formatted ?? 0} filer formatert${pr.errors ? `, ${pr.errors} feil` : ''}`);
   if (pr.cmds && pr.cmds.length) lines.push(`Cmd: ${pr.cmds[0]}`);
   lines.push(`Black: ${bk.ran ? 'kjørt' : 'ikke kjørt'}`);
   lines.push(`Ruff: ${rf.violations ?? 0} funn${rf.fixed != null ? `, ${rf.fixed} auto-fikset` : ''}`);
   if (rf.codes) {
-    const top = Object.entries(rf.codes)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([k, v]) => `${k}:${v}`)
-      .join('  ');
+    const top = Object.entries(rf.codes).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([k,v])=>`${k}:${v}`).join('  ');
     if (top) lines.push(`  ${top}`);
   }
   if (cl.changed != null && cl.total != null) lines.push(`Cleanup: ${cl.changed}/${cl.total} endret`);
-
   box.textContent = lines.join('\n');
 }
 
-/* Pref-lagring */
+/* Pref-lagring (feltliste) */
 // prettier-ignore
 const PREF_FIELDS = `
 project search_terms search_all search_case search_max search_files_only search_path_mode
@@ -849,20 +793,26 @@ PREF_FIELDS.forEach((id) => {
   });
 });
 
-/* Endre prosjekt */
+/* Project change */
 document.getElementById('project').addEventListener('change', async () => {
   loadPrefs();
+  await fetchGitRemotes();
+  await fetchGitBranches();
   await fetchCleanConfig();
 });
-/* Modus-warning */
+
+/* Clean modus-warning */
 document.addEventListener('change', (e) => {
   if (e.target && (e.target.id === 'clean_mode_dry' || e.target.id === 'clean_mode_apply')) {
     updateCleanWarning();
   }
 });
+
 /* Refresh-knapp */
 document.getElementById('refresh').onclick = async () => {
   await fetchProjects();
+  await fetchGitRemotes();
+  await fetchGitBranches();
   await fetchRecipes();
   await fetchBackupInfo();
   await fetchBackupProfiles();
@@ -871,42 +821,20 @@ document.getElementById('refresh').onclick = async () => {
   await loadFormatUIFromConfig();
   loadPrefs();
 };
-/* Knapper */
+
+/* Verktøykjøring */
 document.getElementById('run_search').onclick = () =>
   withStatus('search', 'out_search', async () => {
     const terms = document.getElementById('search_terms').value.trim();
     const dirsText = document.getElementById('search_limit_dirs').value;
-    const limitDirs = dirsText
-      .split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const limitDirs = dirsText.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
     const extsText = document.getElementById('search_limit_exts').value.trim();
-    const limitExts = extsText
-      ? extsText
-          .split(/[,\s]+/)
-          .map((s) => s.trim())
-          .filter(Boolean)
-      : [];
-    const inc =
-      document
-        .getElementById('search_include')
-        ?.value.split(/\r?\n/)
-        .map((s) => s.trim())
-        .filter(Boolean) || [];
-    const exc =
-      document
-        .getElementById('search_exclude')
-        ?.value.split(/\r?\n/)
-        .map((s) => s.trim())
-        .filter(Boolean) || [];
+    const limitExts = extsText ? extsText.split(/[,\s]+/).map((s) => s.trim()).filter(Boolean) : [];
+    const inc = document.getElementById('search_include')?.value.split(/\r?\n/).map((s)=>s.trim()).filter(Boolean) || [];
+    const exc = document.getElementById('search_exclude')?.value.split(/\r?\n/).map((s)=>s.trim()).filter(Boolean) || [];
     const fn = !!document.getElementById('search_filename_search')?.checked;
     const args = {
-      terms: terms
-        ? terms
-            .split(',')
-            .map((s) => s.trim())
-            .filter(Boolean)
-        : [],
+      terms: terms ? terms.split(',').map((s)=>s.trim()).filter(Boolean) : [],
       case_sensitive: document.getElementById('search_case').checked,
       all: document.getElementById('search_all').checked,
       max_size: parseInt(document.getElementById('search_max').value || '2000000', 10),
@@ -914,47 +842,37 @@ document.getElementById('run_search').onclick = () =>
       path_mode: document.getElementById('search_path_mode').value,
       limit_dirs: limitDirs,
       limit_exts: limitExts,
+      filename_search: fn,
     };
     if (inc.length) args.include = inc;
     if (exc.length) args.exclude = exc;
-    args.filename_search = fn;
     return runTool('search', { args }, 'out_search');
   });
 document.getElementById('search_terms').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') document.getElementById('run_search').click();
 });
+
 document.getElementById('run_replace').onclick = () =>
   withStatus('replace', 'out_replace', async () => {
-    const inc = document
-      .getElementById('rep_include')
-      .value.split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const exc = document
-      .getElementById('rep_exclude')
-      .value.split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    return runTool(
-      'replace',
-      {
-        args: {
-          find: document.getElementById('rep_find').value,
-          replace: document.getElementById('rep_repl').value,
-          regex: document.getElementById('rep_regex').checked,
-          case_sensitive: document.getElementById('rep_case').checked,
-          backup: document.getElementById('rep_backup').checked,
-          dry_run: document.getElementById('rep_dry').checked,
-          show_diff: document.getElementById('rep_showdiff').checked,
-          include: inc,
-          exclude: exc,
-          max_size: parseInt(document.getElementById('rep_max').value || '2000000', 10),
-          filename_search: !!document.getElementById('rep_filename_search').checked, // ← NY!
-        },
+    const inc = document.getElementById('rep_include').value.split(/\r?\n/).map((s)=>s.trim()).filter(Boolean);
+    const exc = document.getElementById('rep_exclude').value.split(/\r?\n/).map((s)=>s.trim()).filter(Boolean);
+    return runTool('replace', {
+      args: {
+        find: document.getElementById('rep_find').value,
+        replace: document.getElementById('rep_repl').value,
+        regex: document.getElementById('rep_regex').checked,
+        case_sensitive: document.getElementById('rep_case').checked,
+        backup: document.getElementById('rep_backup').checked,
+        dry_run: document.getElementById('rep_dry').checked,
+        show_diff: document.getElementById('rep_showdiff').checked,
+        include: inc,
+        exclude: exc,
+        max_size: parseInt(document.getElementById('rep_max').value || '2000000', 10),
+        filename_search: !!document.getElementById('rep_filename_search').checked,
       },
-      'out_replace'
-    );
+    }, 'out_replace');
   });
+
 document.getElementById('save_clean_targets').onclick = async () => {
   const targets = collectCleanTargets();
   const proj = currentProject();
@@ -969,6 +887,7 @@ document.getElementById('save_clean_targets').onclick = async () => {
     return data;
   });
 };
+
 document.getElementById('run_paste').onclick = () =>
   withStatus('paste', 'out_paste', async () => {
     const payload = { args: {} };
@@ -977,38 +896,19 @@ document.getElementById('run_paste').onclick = () =>
     if (out) payload.args.out_dir = out;
     const mx = parseInt(document.getElementById('paste_max').value || '4000', 10);
     if (!Number.isNaN(mx)) payload.args.max_lines = mx;
-    const fn = document.getElementById('paste_filename_search').checked;
-    // alltid send ‘filename_search’, da default kan variere mellom prosjekter
-    payload.args.filename_search = !!fn;
-    const inc = document
-      .getElementById('paste_include')
-      .value.split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter(Boolean);
+    payload.args.filename_search = !!document.getElementById('paste_filename_search').checked;
+    const inc = document.getElementById('paste_include').value.split(/\r?\n/).map((s)=>s.trim()).filter(Boolean);
     if (inc.length) payload.args.include = inc;
-    const exc = document
-      .getElementById('paste_exclude')
-      .value.split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const exc = document.getElementById('paste_exclude').value.split(/\r?\n/).map((s)=>s.trim()).filter(Boolean);
     if (exc.length) payload.args.exclude = exc;
     return runTool('paste', payload, 'out_paste');
   });
+
 document.getElementById('run_format').onclick = () =>
   withStatus('format', 'out_format', async () => {
-    const globs = (document.getElementById('fmt_prettier_globs').value || '')
-      .split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    const black_paths = (document.getElementById('fmt_black_paths').value || '')
-      .split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-
+    const globs = (document.getElementById('fmt_prettier_globs').value || '').split(/\r?\n/).map((s)=>s.trim()).filter(Boolean);
+    const black_paths = (document.getElementById('fmt_black_paths').value || '').split(/\r?\n/).map((s)=>s.trim()).filter(Boolean);
     const fmtOverride = { format: {} };
-
-    // prettier
     fmtOverride.format.prettier = {
       enable: !!document.getElementById('fmt_prettier_enable').checked,
       globs: globs.length ? globs : undefined,
@@ -1018,66 +918,29 @@ document.getElementById('run_format').onclick = () =>
       semi: !!document.getElementById('fmt_prettier_semi').checked,
       trailingComma: document.getElementById('fmt_prettier_trailingComma').value,
     };
-
-    // black
     fmtOverride.format.black = {
       enable: !!document.getElementById('fmt_black_enable').checked,
       paths: black_paths.length ? black_paths : undefined,
       line_length: parseInt(document.getElementById('fmt_black_line_length').value || '0', 10) || undefined,
-      target_version:
-        (document.getElementById('fmt_black_target').value || '')
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean) || undefined,
+      target_version: (document.getElementById('fmt_black_target').value || '')
+        .split(',').map((s)=>s.trim()).filter(Boolean) || undefined,
     };
-
-    // ruff
     fmtOverride.format.ruff = {
       enable: !!document.getElementById('fmt_ruff_enable').checked,
       fix: !!document.getElementById('fmt_ruff_fix').checked,
       unsafe_fixes: !!document.getElementById('fmt_ruff_unsafe').checked,
       preview: !!document.getElementById('fmt_ruff_preview').checked,
-      select:
-        (document.getElementById('fmt_ruff_select').value || '')
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean) || undefined,
-      ignore:
-        (document.getElementById('fmt_ruff_ignore').value || '')
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean) || undefined,
+      select: (document.getElementById('fmt_ruff_select').value || '').split(',').map((s)=>s.trim()).filter(Boolean) || undefined,
+      ignore: (document.getElementById('fmt_ruff_ignore').value || '').split(',').map((s)=>s.trim()).filter(Boolean) || undefined,
     };
-
-    // cleanup
     fmtOverride.format.cleanup = {
       enable: !!document.getElementById('fmt_cleanup_enable').checked,
       compact_blocks: !!document.getElementById('fmt_cleanup_compact').checked,
       max_consecutive_blanks: parseInt(document.getElementById('fmt_cleanup_maxblank').value || '0', 10),
-      exts:
-        (document.getElementById('fmt_cleanup_exts').value || '')
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean) || undefined,
-      exclude_exts:
-        (document.getElementById('fmt_cleanup_excl_exts').value || '')
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean) || undefined,
+      exts: (document.getElementById('fmt_cleanup_exts').value || '').split(',').map((s)=>s.trim()).filter(Boolean) || undefined,
+      exclude_exts: (document.getElementById('fmt_cleanup_excl_exts').value || '').split(',').map((s)=>s.trim()).filter(Boolean) || undefined,
     };
-
-    const res = await runTool(
-      'format',
-      {
-        args: {
-          dry_run: document.getElementById('format_dry').checked,
-          override: fmtOverride,
-        },
-      },
-      'out_format'
-    );
-
-    // tegn oppsummering (Prettier/Black/Ruff/Cleanup)
+    const res = await runTool('format', { args: { dry_run: document.getElementById('format_dry').checked, override: fmtOverride } }, 'out_format');
     renderFormatSummary(res);
     return res;
   });
@@ -1085,25 +948,22 @@ document.getElementById('run_format').onclick = () =>
 document.getElementById('fmt_load_cfg').onclick = async () => {
   await withStatus('format', 'out_format', async () => {
     await loadFormatFromConfig(false);
-    savePrefs(); // speil til localStorage
+    savePrefs();
   });
 };
-
 document.getElementById('fmt_save_cfg').onclick = async () => {
-  const fmt = buildFormatConfigFromUI();
-  const payload = { content: JSON.stringify({ format: fmt }) };
+  const payload = gatherFormatUIToConfig();
   await withStatus('format', 'out_format', async () => {
     const r = await fetch('/api/config?name=' + encodeURIComponent('format_config.json'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ content: JSON.stringify(payload) }),
     });
     const d = await r.json();
     const out = document.getElementById('out_format');
     out.value = d.ok ? 'Lagret format_config.json' : d.error || JSON.stringify(d);
   });
 };
-
 document.getElementById('fmt_preview_btn').onclick = async () => {
   const rel = document.getElementById('fmt_preview_path').value.trim();
   const proj = currentProject();
@@ -1135,41 +995,20 @@ document.getElementById('run_clean').onclick = () =>
       const ok = confirm(['Dette vil SLETTE filer.', 'Er du sikker på at du vil fortsette?'].join('\n'));
       if (!ok) return;
     }
-    return runTool(
-      'clean',
-      {
-        args: {
-          mode,
-          what: what
-            ? what
-                .split(',')
-                .map((s) => s.trim())
-                .filter(Boolean)
-            : [],
-          skip: skip
-            ? skip
-                .split(',')
-                .map((s) => s.trim())
-                .filter(Boolean)
-            : [],
-          targets,
-        },
+    return runTool('clean', {
+      args: {
+        mode,
+        what: what ? what.split(',').map((s)=>s.trim()).filter(Boolean) : [],
+        skip: skip ? skip.split(',').map((s)=>s.trim()).filter(Boolean) : [],
+        targets,
       },
-      'out_clean'
-    );
+    }, 'out_clean');
   });
+
 document.getElementById('run_gh').onclick = () =>
-  withStatus('gh-raw', 'out_gh', async () => {
-    return runTool(
-      'gh-raw',
-      {
-        args: {
-          path_prefix: document.getElementById('gh_prefix').value.trim(),
-        },
-      },
-      'out_gh'
-    );
-  });
+  withStatus('gh-raw', 'out_gh', async () =>
+    runTool('gh-raw', { args: { path_prefix: document.getElementById('gh_prefix').value.trim() } }, 'out_gh'));
+
 if (document.getElementById('run_backup')) {
   document.getElementById('run_backup').onclick = () =>
     withStatus('backup', 'out_backup', async () => {
@@ -1212,6 +1051,7 @@ if (document.getElementById('fmt_save')) {
     await saveFormatConfig();
   };
 }
+
 /* FORMAT underfaner */
 document.getElementById('fmt_tabs').addEventListener('click', (e) => {
   const btn = e.target.closest('.fmt-tab');
@@ -1221,6 +1061,7 @@ document.getElementById('fmt_tabs').addEventListener('click', (e) => {
   document.querySelectorAll('.fmt-pane').forEach((p) => p.classList.toggle('active', p.getAttribute('data-fmt-pane') === tab));
 });
 
+/* Helper for setVal */
 function _setVal(id, val, isChk = false) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -1228,79 +1069,13 @@ function _setVal(id, val, isChk = false) {
   else if (val !== undefined && val !== null) el.value = String(val);
 }
 
+/* Les format_config og fyll UI (respekter ev. localStorage) */
 async function loadFormatFromConfig(preferPrefs = true) {
-  // preferPrefs=true: ikke overstyr verdier som allerede er satt av localStorage
   const r = await fetch('/api/config?name=' + encodeURIComponent('format_config.json'));
   const d = await r.json();
   let cfg = {};
-  try {
-    cfg = JSON.parse(d.content || '{}');
-  } catch {}
+  try { cfg = JSON.parse(d.content || '{}'); } catch {}
   const f = cfg.format || {};
-
-  function buildFormatConfigFromUI() {
-    const csv = (s) =>
-      s
-        ? s
-            .split(',')
-            .map((x) => x.trim())
-            .filter(Boolean)
-        : [];
-    const intOr = (v, fallback) => {
-      const n = parseInt(String(v || '').trim(), 10);
-      return Number.isFinite(n) ? n : fallback;
-    };
-
-    const fmt = {
-      allow_home: false, // la stå, du kan evt. knytte til et checkbox senere
-      prettier: {
-        enable: !!document.getElementById('fmt_prettier_enable')?.checked,
-        globs: csv(document.getElementById('fmt_prettier_globs')?.value),
-        printWidth: intOr(document.getElementById('fmt_prettier_printWidth')?.value, undefined),
-        tabWidth: intOr(document.getElementById('fmt_prettier_tabWidth')?.value, undefined),
-        singleQuote: !!document.getElementById('fmt_prettier_singleQuote')?.checked,
-        semi: !!document.getElementById('fmt_prettier_semi')?.checked,
-        trailingComma: document.getElementById('fmt_prettier_trailingComma')?.value || '' || undefined,
-      },
-      black: {
-        enable: !!document.getElementById('fmt_black_enable')?.checked,
-        paths: csv(document.getElementById('fmt_black_paths')?.value).length
-          ? csv(document.getElementById('fmt_black_paths')?.value)
-          : ['./'],
-        line_length: intOr(document.getElementById('fmt_black_line_length')?.value, undefined),
-        target: (document.getElementById('fmt_black_target')?.value || '').trim() || undefined,
-      },
-      ruff: {
-        enable: !!document.getElementById('fmt_ruff_enable')?.checked,
-        fix: !!document.getElementById('fmt_ruff_fix')?.checked,
-        unsafe_fixes: !!document.getElementById('fmt_ruff_unsafe')?.checked,
-        preview: !!document.getElementById('fmt_ruff_preview')?.checked,
-        select: (document.getElementById('fmt_ruff_select')?.value || '').trim() || undefined,
-        ignore: (document.getElementById('fmt_ruff_ignore')?.value || '').trim() || undefined,
-      },
-      cleanup: {
-        enable: !!document.getElementById('fmt_cleanup_enable')?.checked,
-        paths: [],
-        exts: csv(document.getElementById('fmt_cleanup_exts')?.value),
-        exclude_exts: csv(document.getElementById('fmt_cleanup_excl_exts')?.value),
-        compact_blocks: !!document.getElementById('fmt_cleanup_compact')?.checked,
-        max_consecutive_blanks: intOr(document.getElementById('fmt_cleanup_maxblank')?.value, 1),
-      },
-    };
-
-    // fjern undefined/blanke felter rent kosmetisk
-    const prune = (obj) => {
-      Object.keys(obj).forEach((k) => {
-        const v = obj[k];
-        if (v === undefined || v === null || v === '') delete obj[k];
-        else if (Array.isArray(v) && v.length === 0) delete obj[k];
-        else if (typeof v === 'object' && !Array.isArray(v)) prune(v);
-      });
-    };
-    prune(fmt);
-    return fmt;
-  }
-
   // Prettier
   const pr = f.prettier || {};
   if (!preferPrefs || !localStorage.getItem(PREF_KEY(currentProject()))) {
@@ -1312,14 +1087,12 @@ async function loadFormatFromConfig(preferPrefs = true) {
     _setVal('fmt_prettier_semi', pr.semi, true);
     _setVal('fmt_prettier_trailingComma', pr.trailingComma);
   }
-
   // Black
   const bl = f.black || {};
   _setVal('fmt_black_enable', bl.enable, true);
   _setVal('fmt_black_paths', Array.isArray(bl.paths) ? bl.paths.join(',') : bl.paths);
   _setVal('fmt_black_line_length', bl.line_length);
   _setVal('fmt_black_target', bl.target);
-
   // Ruff
   const rf = f.ruff || {};
   _setVal('fmt_ruff_enable', rf.enable, true);
@@ -1328,7 +1101,6 @@ async function loadFormatFromConfig(preferPrefs = true) {
   _setVal('fmt_ruff_preview', !!rf.preview, true);
   _setVal('fmt_ruff_select', rf.select);
   _setVal('fmt_ruff_ignore', rf.ignore);
-
   // Cleanup
   const cl = f.cleanup || {};
   _setVal('fmt_cleanup_enable', cl.enable, true);
@@ -1338,29 +1110,8 @@ async function loadFormatFromConfig(preferPrefs = true) {
   _setVal('fmt_cleanup_excl_exts', Array.isArray(cl.exclude_exts) ? cl.exclude_exts.join(',') : cl.exclude_exts);
 }
 
-
-function renderHelp(tool) {
-  const p = HELP_CONTENT[tool] || { title: 'Hjelp', html: '<p>Ingen hjelp for dette verktøyet.</p>' };
-  const title = document.getElementById('help_title');
-  const body = document.getElementById('help_body');
-  if (title) title.textContent = p.title;
-  if (body) body.innerHTML = p.html;
-}
-(function wireHelpToggle(){
-  const btn = document.getElementById('help_toggle');
-  const body = document.getElementById('help_body');
-  if (!btn || !body) return;
-  btn.addEventListener('click', () => {
-    const isHidden = body.style.display === 'none';
-    body.style.display = isHidden ? '' : 'none';
-    btn.textContent = (isHidden ? '▾' : '▸') + ' Hjelp';
-  });
-})();
-
 /* ---------- Help panel control (per-tool) ---------- */
-
 const HELP_STATE_KEY = (tool) => `rtools:help_open:${tool}`;
-
 function setHelpOpen(tool, open) {
   const panel = document.querySelector(`.help-panel[data-help-for="${tool}"]`);
   if (!panel) return;
@@ -1374,15 +1125,12 @@ function setHelpOpen(tool, open) {
     localStorage.removeItem(HELP_STATE_KEY(tool));
   }
 }
-
 function toggleHelp(tool) {
   const panel = document.querySelector(`.help-panel[data-help-for="${tool}"]`);
   if (!panel) return;
   const isOpen = panel.classList.contains('open');
   setHelpOpen(tool, !isOpen);
 }
-
-/* Wire up any .help-toggle buttons (data-help-for="git" etc.) */
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('.help-toggle');
   if (!btn) return;
@@ -1390,14 +1138,10 @@ document.addEventListener('click', (e) => {
   if (!tool) return;
   toggleHelp(tool);
 });
-
-/* When switching tabs, only the active tool's help is relevant */
 const _origSetActiveTool = setActiveTool;
 setActiveTool = function (name) {
   _origSetActiveTool(name);
-  // Hide all help panels
   document.querySelectorAll('.help-panel').forEach((p) => p.classList.remove('open'));
-  // Re-open if previously open for this tool
   const wasOpen = !!localStorage.getItem(HELP_STATE_KEY(name));
   if (wasOpen) setHelpOpen(name, true);
 };
@@ -1411,30 +1155,24 @@ setLamp('status_init', 'busy');
     await fetchProjects();
     await fetchGitRemotes();
     await fetchGitBranches();
-    // Oppdater dropdowns når prosjekt endres
     document.getElementById('project').addEventListener('change', async ()=>{
       await fetchGitRemotes();
       await fetchGitBranches();
     });
-
     await fetchRecipes();
     await fetchBackupInfo();
     await fetchBackupProfiles();
     await fetchCleanConfig();
-    // Velg aktiv fane: localStorage > server default > 'search'
     const stored = localStorage.getItem(ACTIVE_TOOL_KEY);
     if (stored && TOOLS.includes(stored)) setActiveTool(stored);
     else {
-      const s = await fetch('/api/settings')
-        .then((r) => r.json())
-        .catch(() => ({ global: {} }));
+      const s = await fetch('/api/settings').then((r) => r.json()).catch(() => ({ global: {} }));
       setActiveTool(s?.global?.default_tool || 'search');
-}
+    }
     await loadSettings();
     await loadFormatUIFromConfig();
     loadPrefs();
-    await loadFormatFromConfig(true); // fyll inn fra JSON (kun der prefs ikke allerede overstyrer)
-
+    await loadFormatFromConfig(true);
     updateCleanWarning();
     setLamp('status_init', 'ok');
     console.log('[webui] init OK');

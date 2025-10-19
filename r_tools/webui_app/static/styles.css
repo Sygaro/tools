@@ -12,9 +12,7 @@
   --gap: 10px;
   --maxw: 1400px;
 }
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 body {
   margin: 0;
   background: var(--bg);
@@ -56,18 +54,13 @@ main {
   border-radius: var(--radius);
   padding: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  transition:
-    transform 0.1s ease,
-    box-shadow 0.2s ease;
+  transition: transform 0.1s ease, box-shadow 0.2s ease;
 }
 .card:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
 }
-label {
-  display: block;
-  margin: 8px 0 4px;
-}
+label { display: block; margin: 8px 0 4px; }
 input[type='text'],
 input[type='number'],
 textarea,
@@ -96,254 +89,97 @@ textarea {
   transition: all 0.2s ease;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
 }
-.btn:hover {
-  filter: brightness(1.05);
-  transform: translateY(-1px);
-}
-.btn[disabled] {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-.inline {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.muted {
-  color: var(--muted);
-  font-size: 13px;
-}
+.btn:hover { filter: brightness(1.05); transform: translateY(-1px); }
+.btn[disabled] { opacity: 0.6; cursor: not-allowed; }
+
+.inline { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.muted { color: var(--muted); font-size: 13px; }
+
 /* Statuslamper */
 .lamp {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  margin-left: 8px;
-  border-radius: 50%;
-  background: #4a4f63;
-  border: 1px solid var(--border);
-  vertical-align: middle;
-  box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
-  transition:
-    background 0.2s ease,
-    box-shadow 0.2s ease;
+  display: inline-block; width: 10px; height: 10px; margin-left: 8px;
+  border-radius: 50%; background: #4a4f63; border: 1px solid var(--border);
+  vertical-align: middle; box-shadow: 0 0 0 0 rgba(0,0,0,0);
+  transition: background .2s ease, box-shadow .2s ease;
 }
-.lamp.busy {
-  background: #d1a300;
-  box-shadow: 0 0 0 6px rgba(209, 163, 0, 0.1);
-  animation: pulse 1.2s infinite;
-}
-.lamp.ok {
-  background: #18a957;
-  box-shadow: 0 0 0 6px rgba(24, 169, 87, 0.12);
-}
-.lamp.err {
-  background: #d14c4c;
-  box-shadow: 0 0 0 6px rgba(209, 76, 76, 0.12);
-}
+.lamp.busy { background: #d1a300; box-shadow: 0 0 0 6px rgba(209,163,0,.1); animation: pulse 1.2s infinite; }
+.lamp.ok { background: #18a957; box-shadow: 0 0 0 6px rgba(24,169,87,.12); }
+.lamp.err { background: #d14c4c; box-shadow: 0 0 0 6px rgba(209,76,76,.12); }
 @keyframes pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(209, 163, 0, 0.22);
-  }
-  70% {
-    box-shadow: 0 0 0 8px rgba(209, 163, 0, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
-  }
+  0% { box-shadow: 0 0 0 0 rgba(209,163,0,.22); }
+  70% { box-shadow: 0 0 0 8px rgba(209,163,0,0); }
+  100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); }
 }
-.summary {
-  font-size: 12px;
-  color: var(--muted);
-  margin: 6px 0 0;
-}
+.summary { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
+
 /* Tabs */
-.tabs {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-left: 12px;
-}
+.tabs { display: flex; gap: 8px; align-items: center; margin-left: 12px; }
 .tab {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 8px 12px;
-  border-radius: 10px;
-  cursor: pointer;
+  background: transparent; border: 1px solid var(--border); color: var(--text);
+  padding: 8px 12px; border-radius: 10px; cursor: pointer;
 }
-.tab.active {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25) inset;
-}
-.tool {
-  display: none;
-}
-.tool.active {
-  display: block;
-}
+.tab.active { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(59,130,246,.25) inset; }
+
+/* Tool visibility */
+.tool { display: none; }
+.tool.active { display: block; }
+
 /* Felles action-bar */
-.tool-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-.tool-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 18px;
-  font-weight: 600;
-}
-.tool-actions {
-  margin-left: auto;
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
+.tool-header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.tool-title { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 600; }
+.tool-actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+
 /* Oppskrifter (dropdown) */
-.recipes {
-  position: relative;
-}
+.recipes { position: relative; }
 .recipes-btn {
-  padding: 8px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text);
-  font-weight: 600;
-  cursor: pointer;
+  padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border);
+  background: transparent; color: var(--text); font-weight: 600; cursor: pointer;
 }
 .recipes-pop {
-  position: absolute;
-  right: 0;
-  top: 120%;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
-  min-width: 260px;
-  padding: 8px;
-  display: none;
-  z-index: 50;
+  position: absolute; right: 0; top: 120%; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.35);
+  min-width: 260px; padding: 8px; display: none; z-index: 50;
 }
-.recipes-pop.show {
-  display: block;
-}
-.recipes-pop .row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 4px;
-}
-.recipes-pop .row button {
-  margin-left: auto;
-}
-.help {
-  display: inline-block;
-  margin-left: 6px;
-  cursor: help;
-  font-weight: 600;
-  font-size: 0.9em;
-  opacity: 0.9;
-}
+.recipes-pop.show { display: block; }
+.recipes-pop .row { display: flex; align-items: center; gap: 8px; padding: 6px 4px; }
+.recipes-pop .row button { margin-left: auto; }
+
+/* Tooltips */
+.help { display: inline-block; margin-left: 6px; cursor: help; font-weight: 600; font-size: .9em; opacity: .9; }
 .help:hover::after {
-  content: attr(data-tip);
-  position: absolute;
-  transform: translateX(6px) translateY(-4px);
-  max-width: 520px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: #222;
-  color: #ddd;
-  font-weight: 400;
-  font-size: 12px;
-  line-height: 1.35;
-  white-space: normal;
-  z-index: 9999;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-}
-.tabs.mini .tab {
-  padding: 6px 10px;
-  font-size: 13px;
-}
-.fmt-pane {
-  display: none;
-}
-.fmt-pane.active {
-  display: block;
-}
-.grid.two {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-.group {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px;
-}
-.group-title {
-  font-weight: 600;
-  margin-bottom: 8px;
-  opacity: 0.85;
+  content: attr(data-tip); position: absolute; transform: translateX(6px) translateY(-4px);
+  max-width: 520px; padding: 8px 10px; border-radius: 8px; background: #222; color: #ddd;
+  font-weight: 400; font-size: 12px; line-height: 1.35; white-space: normal; z-index: 9999;
+  box-shadow: 0 4px 16px rgba(0,0,0,.4);
 }
 
-/* Help panel card */
-.help-panel {
-  display: none;             /* hidden by default */
-  align-self: start;         /* avoid stretching */
-  max-height: none;          /* allow full content */
-  overflow: auto;
-}
+/* Format underfaner */
+.tabs.mini .tab { padding: 6px 10px; font-size: 13px; }
+.fmt-pane { display: none; }
+.fmt-pane.active { display: block; }
+.grid.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.group { border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+.group-title { font-weight: 600; margin-bottom: 8px; opacity: .85; }
 
-/* When help is visible, show it */
-.help-panel.open {
-  display: block;
-}
-
-/* Collapsed takes zero space (we already use display:none) */
-.help-panel.collapsed {
-  display: none !important;
-}
-
-/* Nice monospace blocks in help */
-.help-pre {
-  background: var(--code-bg, #0e1220);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  overflow: auto;
-}
-.help-list {
-  margin: 0 0 8px 0;
-  padding-left: 18px;
-}
-.help-list li { margin: 6px 0; }
-
-/* Responsive: on narrow viewports, stack */
-@media (max-width: 980px) {
-  main .row {
-    grid-template-columns: 1fr;
-  }
-  .help-panel.open {
-    order: 2; /* help appears after the tool */
-  }
-}
+/* Help panel (per verktøy) */
 .help-panel { display: none; align-self: start; max-height: none; overflow: auto; }
 .help-panel.open { display: block; }
 .help-panel.collapsed { display: none !important; }
+.help-pre {
+  background: var(--code-bg, #0e1220); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px; overflow: auto;
+}
+.help-list { margin: 0 0 8px 0; padding-left: 18px; }
+.help-list li { margin: 6px 0; }
 
-/* Når en help-panel er åpen, bruk 2 kolonner (tool + hjelp) */
+/* Når helppanelet er åpent, vis tool + hjelp i to kolonner */
 .row:has(.help-panel.open) {
   grid-template-columns: 1fr 1fr;
+  gap: 16px;
 }
 
-/* Responsivt */
+/* Responsivt: stack på smale skjermer */
 @media (max-width: 980px) {
   .row { grid-template-columns: 1fr; }
-  .help-panel.open { order: 2; }
+  .help-panel.open { order: 2; } /* help under verktøy */
 }
-
