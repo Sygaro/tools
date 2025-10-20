@@ -1,19 +1,14 @@
 # ./tools/r_tools/tools/paste_chunks.py
 from __future__ import annotations
 
-import base64
-import fnmatch
 import hashlib
-from collections.abc import Iterable, Iterator
+import io
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-# --------------------------------------------------------------------------------------------------
-# Konfig / typer
-# --------------------------------------------------------------------------------------------------
-
 @dataclass(frozen=True)
-class PasteConfig:
+class PasteCfg:
     project_root: Path
     out_dir: Path
     max_lines: int
@@ -23,337 +18,336 @@ class PasteConfig:
     exclude: list[str]
     only_globs: list[str]
     skip_globs: list[str]
+    # globale ekskluderinger
+    global_exclude_dirs: list[str]
+    global_exclude_files: list[str]
 
-# --------------------------------------------------------------------------------------------------
-# Hjelpere for glob/filvalg (speiler oppførselen i search/replace mht filename_search)
-# --------------------------------------------------------------------------------------------------
+# ---------- små hjelpere ----------
 
-def _normalize_globs(globs: Iterable[str] | None, filename_search: bool) -> list[str]:
+def _sha256_bytes(b: bytes) -> str:
+    return hashlib.sha256(b).hexdigest()
+
+def _read_text(path: Path) -> tuple[str, int]:
+    data = path.read_text(encoding="utf-8", errors="replace")
+    return data, data.count("\n") + (0 if data.endswith("\n") else 1)
+
+def _is_binary(path: Path) -> bool:
+    try:
+        chunk = path.read_bytes()[:4096]
+    except Exception:
+        return True
+    return b"\x00" in chunk
+
+def _normalize_globs(globs: Iterable[str], *, filename_search: bool) -> list[str]:
     """
-    Normaliserer globs. Når filename_search=True:
-      - rene filnavn uten '/' → '**/<navn>'
-      - ellers beholdes mønsteret.
+    Når filename_search=True og mønsteret er et 'rent filnavn' (ingen '/', ingen wildcard),
+    genererer vi TO mønstre:
+      - <navn>            (fanger root-filer: '.env', '.gitignore')
+      - **/<navn>         (fanger filer dypere i treet)
     """
     out: list[str] = []
     for g in globs or []:
         s = str(g).strip()
         if not s:
             continue
+        # normaliser './foo' -> 'foo'
+        if s.startswith("./"):
+            s = s[2:]
         is_pure_filename = ("/" not in s) and not any(ch in s for ch in "*?[]")
         if filename_search and is_pure_filename:
+            # Legg til begge for å matche både root og underkataloger
+            out.append(s)
             out.append(f"**/{s}")
         else:
             out.append(s)
     return out
 
-def _under_root(p: Path, root: Path) -> bool:
-    try:
-        p.resolve().relative_to(root.resolve())
-        return True
-    except Exception:
-        return False
+def _match_any_rel(patterns: list[str], rel_posix: str) -> bool:
+    import fnmatch
 
-def _gather_candidates(
-    root: Path,
-    include: list[str],
-    exclude: list[str],
-    only_globs: list[str],
-    skip_globs: list[str],
-) -> list[Path]:
-    """
-    Samle kandidater fra include-globs, filtrer bort exclude/skip, og evt. innsnevr til only_globs.
-    Returnerer sortert unik liste (absolutte Path).
-    """
-    inc: list[str] = include or ["**/*.*"]
-    exc: list[str] = exclude or []
-    only: list[str] = only_globs or []
-    skip: list[str] = skip_globs or []
+    for pat in patterns or []:
+        if fnmatch.fnmatch(rel_posix, pat):
+            return True
+    return False
 
-    # 1) Inkluder via globs
-    gathered: set[Path] = set()
-    for pat in inc:
+# ---- exclude_dirs: del opp i (1) navn, (2) sti-baser, (3) globs ----
+
+def _split_dir_excludes(root: Path, items: Iterable[str]) -> tuple[list[str], list[Path], list[str]]:
+    """
+    Returnerer:
+      - names:   rene katalognavn uten / og uten wildcard (eks: '__pycache__', '.git')
+      - bases:   bestemte katalogstier (absolutte eller relative til root) uten wildcard
+      - globs:   globs som matcher relativ katalog-sti (eks: 'dist/**', 'build*')
+    NB: ingen resolve(); vi vil ikke følge symlinker.
+    """
+    names: list[str] = []
+    bases: list[Path] = []
+    globs: list[str] = []
+    for raw in items or []:
+        s = str(raw).strip()
+        if not s:
+            continue
+        has_wild = any(ch in s for ch in "*?[]")
+        has_slash = "/" in s
+        if not has_wild and not has_slash:
+            names.append(s)
+        elif not has_wild:
+            # sti uten wildcard → base
+            p = Path(s)
+            bases.append(p if p.is_absolute() else (root / p))
+        else:
+            # glob (matcher mot relativ sti)
+            globs.append(s)
+    return names, bases, globs
+
+def _under_any_base(path: Path, bases: list[Path]) -> bool:
+    for b in bases:
+        try:
+            path.relative_to(b)
+            return True
+        except Exception:
+            continue
+    return False
+
+def _has_any_dirname(path_under_root: Path, names: list[str]) -> bool:
+    # Sjekk om noen av delene i den RELATIVE stien er i names
+    for part in path_under_root.parts:
+        if part in names:
+            return True
+    return False
+
+def _iter_include_candidates(root: Path, include: list[str]) -> Iterable[Path]:
+    """
+    Iterator over kandidater fra include-globs. Returnerer *absolutte* stier,
+    men uten å resolve symlinker.
+    """
+    seen: set[Path] = set()
+    for pat in include:
         for p in root.glob(pat):
             if p.is_file():
-                gathered.add(p.resolve())
+                if p not in seen:
+                    seen.add(p)
+                    yield p
 
-    # 2) Ekskluder via exclude/skip (relativ sti mot root)
-    def _rel_posix(p: Path) -> str | None:
+def _effective_include_list(pcfg: PasteCfg) -> list[str]:
+    # Hvis include er tom, fall tilbake til bred default (“alle filer med punktum”)
+    return pcfg.include or ["*.*", "**/*.*"]
+
+def _gather_files(pcfg: PasteCfg) -> list[Path]:
+    root = pcfg.project_root
+
+    include_globs = _normalize_globs(_effective_include_list(pcfg), filename_search=pcfg.filename_search)
+    exclude_globs = _normalize_globs(pcfg.exclude, filename_search=pcfg.filename_search)
+    only_globs = list(pcfg.only_globs or [])
+    skip_globs = list(pcfg.skip_globs or [])
+
+    # Globale ekskluderinger (kataloger og filer)
+    dir_names, dir_bases, dir_globs = _split_dir_excludes(root, pcfg.global_exclude_dirs)
+    # Global exclude files: basenavn vs globs på relativ filsti
+    g_rel_file_globs = [g for g in (pcfg.global_exclude_files or []) if any(ch in g for ch in "*?[]")]
+    g_rel_file_names = set(g for g in (pcfg.global_exclude_files or []) if not any(ch in g for ch in "*?[]"))
+
+    # Kandidater fra include
+    cands = list(_iter_include_candidates(root, include_globs))
+    files: list[Path] = []
+    for p in cands:
+        # relativ sti (uten resolve)
         try:
-            return p.resolve().relative_to(root.resolve()).as_posix()
+            rel = p.relative_to(root)
         except Exception:
-            return None
-
-    def _excluded_by_globs(rel_posix: str, globs: list[str]) -> bool:
-        return any(fnmatch.fnmatch(rel_posix, g) for g in globs)
-
-    filtered: list[Path] = []
-    for p in sorted(gathered):
-        rel = _rel_posix(p)
-        if rel is None:
+            # Utenfor root? hopp over for sikkerhets skyld
             continue
-        if _excluded_by_globs(rel, exc):
+        rel_posix = rel.as_posix()
+
+        # --- katalog-ekscluderinger ---
+        # 1) navn hvor som helst i stien
+        if _has_any_dirname(rel.parent, dir_names):
             continue
-        if _excluded_by_globs(rel, skip):
+        # 2) under spesifikk base-katalog
+        if _under_any_base(p.parent, dir_bases):
             continue
-        filtered.append(p)
+        # 3) matcher relativ katalog-glob (sjekk mappen, og hele rel-stien for sikkerhet)
+        if _match_any_rel(dir_globs, rel.parent.as_posix()) or _match_any_rel(dir_globs, rel_posix):
+            continue
 
-    # 3) only_globs (hvis satt) → behold bare filer som matcher minst én only_glob
-    if only:
-        only_filtered: list[Path] = []
-        for p in filtered:
-            rel = _rel_posix(p)
-            if rel is None:
-                continue
-            if any(fnmatch.fnmatch(rel, g) for g in only):
-                only_filtered.append(p)
-        filtered = only_filtered
+        # --- globale fil-ekscluderinger ---
+        if p.name in g_rel_file_names:
+            continue
+        if _match_any_rel(g_rel_file_globs, rel_posix):
+            continue
 
-    return filtered
+        # --- lokale exclude/only/skip ---
+        if _match_any_rel(exclude_globs, rel_posix):
+            continue
+        if only_globs and not _match_any_rel(only_globs, rel_posix):
+            continue
+        if skip_globs and _match_any_rel(skip_globs, rel_posix):
+            continue
 
-# --------------------------------------------------------------------------------------------------
-# Binær/tekst-deteksjon og trygg lesing
-# --------------------------------------------------------------------------------------------------
+        files.append(p)
 
-def _looks_binary(data: bytes) -> bool:
-    """
-    Enkel og robust sjekk:
-      - inneholder NUL-byte?
-      - høy andel kontrolltegn?
-    """
-    if not data:
-        return False
-    if b"\x00" in data:
-        return True
-    # Tell kontrolltegn (0x00–0x08, 0x0E–0x1F) – ignorer \t \n \r \f \v
-    text_whitelist = {0x09, 0x0A, 0x0D, 0x0C, 0x0B}
-    ctrl = sum(1 for b in data if b < 0x20 and b not in text_whitelist)
-    # Heuristikk: > 30% kontrolltegn → binært
-    return (ctrl / len(data)) > 0.30
+    # Deterministisk sortering (uten resolve)
+    return sorted(files, key=lambda x: x.relative_to(root).as_posix())
 
-def _read_utf8_strict(path: Path, sniff_bytes: int = 8192) -> tuple[bool, str | bytes]:
-    """
-    Returnerer (is_text, content). For tekst: content=str (utf-8-strict).
-    For binært: content=bytes.
-    """
-    with open(path, "rb") as f:
-        head = f.read(sniff_bytes)
-        if _looks_binary(head):
-            # tidlig klassifisering
-            rest = f.read()  # les resten for evt. base64
-            return False, head + rest
-        # prøv streng utf-8 decode (strikt)
-        try:
-            # Les hele filen i minne. For forventede prosjektfiler er dette ok.
-            # (Hvis du ønsker streaming-diff senere kan vi gjøre inkrementell decode)
-            data = head + f.read()
-            text = data.decode("utf-8", errors="strict")
-            return True, text
-        except UnicodeDecodeError:
-            # Dekode feilet → behandle som binært
-            rest = f.read()
-            return False, head + rest  # (rest er tom her; med strict-try før f.read() null)
-
-# --------------------------------------------------------------------------------------------------
-# Chunk-writer (samler flere filer i én paste_XXXX.txt med linjetak)
-# --------------------------------------------------------------------------------------------------
-
-class ChunkWriter:
-    def __init__(self, out_dir: Path, max_lines: int) -> None:
-        self.out_dir = out_dir
-        self.max_lines = max(50, int(max_lines))  # vern mot altfor små verdier
-        self._current_lines = 0
-        self._index = 0
-        self._cur_path: Path | None = None
-        self._cur_fp = None  # type: ignore[var-annotated]
-        self._written_files: list[Path] = []
-
-        self.out_dir.mkdir(parents=True, exist_ok=True)
-
-    def _open_new(self) -> None:
-        if self._cur_fp:
-            self._cur_fp.close()
-        self._index += 1
-        filename = f"paste_{self._index:04d}.txt"
-        self._cur_path = (self.out_dir / filename).resolve()
-        self._cur_fp = open(self._cur_path, "w", encoding="utf-8", newline="\n")
-        self._current_lines = 0
-        self._written_files.append(self._cur_path)
-
-    def _ensure_capacity(self, lines_needed: int) -> None:
-        if self._cur_fp is None:
-            self._open_new()
-            return
-        if self._current_lines + lines_needed > self.max_lines:
-            self._open_new()
-
-    def write_block(
-        self,
-        project_root: Path,
-        file_path: Path,
-        content_text: str,
-        chunk_idx: int,
-        chunk_total: int,
-    ) -> None:
-        """
-        Skriver en filblokk i samme format som du viste tidligere.
-        content_text må være ferdig-tekst (utf-8), ikke inkludere trailing newline (vi håndterer).
-        """
-        rel = file_path.resolve().relative_to(project_root.resolve()).as_posix()
-        lines = content_text.splitlines()
-        # Bygg overskrift + kodeblokk
-        sha256 = hashlib.sha256(content_text.encode("utf-8")).hexdigest()
-        header = [
-            "===== BEGIN FILE =====",
-            f"PATH: {rel}",
-            f"LINES: {len(lines)}",
-            f"CHUNK: {chunk_idx}/{chunk_total}",
-            f"SHA256: {sha256}",
-            "----- BEGIN CODE -----",
-        ]
-        footer = [
-            "----- END CODE -----",
-            "===== END FILE =====",
-        ]
-        needed = len(header) + len(lines) + len(footer)
-        self._ensure_capacity(needed)
-
-        assert self._cur_fp is not None
-        for ln in header:
-            self._cur_fp.write(ln + "\n")
-        for ln in lines:
-            self._cur_fp.write(ln + "\n")
-        for ln in footer:
-            self._cur_fp.write(ln + "\n")
-        self._current_lines += needed
-
-    def close(self) -> None:
-        if self._cur_fp:
-            self._cur_fp.close()
-            self._cur_fp = None
-
-    @property
-    def written_files(self) -> list[Path]:
-        return list(self._written_files)
-
-# --------------------------------------------------------------------------------------------------
-# Kjernefunksjon
-# --------------------------------------------------------------------------------------------------
-
-def _read_cfg(cfg: dict) -> PasteConfig:
-    p = cfg.get("paste", {}) or {}
-    root = Path(p.get("root", cfg.get("project_root", "."))).resolve()
-    out = Path(p.get("out_dir", "paste_out"))
-    out = out if out.is_absolute() else (root / out)
-    max_lines = int(p.get("max_lines", 4000))
-    allow_binary = bool(p.get("allow_binary", False))
-    filename_search = bool(p.get("filename_search", False))
-
-    include = _normalize_globs(p.get("include") or ["*.*", "**/*.*"], filename_search)
-    exclude = _normalize_globs(p.get("exclude") or [], filename_search)
-    only_globs = _normalize_globs(p.get("only_globs") or [], filename_search)
-    skip_globs = _normalize_globs(p.get("skip_globs") or [], filename_search)
-
-    return PasteConfig(
-        project_root=root,
-        out_dir=out.resolve(),
-        max_lines=max_lines,
-        allow_binary=allow_binary,
-        filename_search=filename_search,
-        include=list(include),
-        exclude=list(exclude),
-        only_globs=list(only_globs),
-        skip_globs=list(skip_globs),
-    )
-
-def _format_binary_block(data: bytes, project_root: Path, file_path: Path) -> str:
-    """
-    Returnerer en enkel, sikker representasjon for binærfiler.
-    Hvis du vil ha hex i stedet for base64 kan vi endre dette med et lite flagg senere.
-    """
-    b64 = base64.b64encode(data).decode("ascii")
-    rel = file_path.resolve().relative_to(project_root.resolve()).as_posix()
-    return f"# BINARY FILE (base64) — {rel}\n" f"# length={len(data)} bytes\n" f"{b64}\n"
-
-def _iter_indexed(files: list[Path]) -> Iterator[tuple[int, int, Path]]:
-    total = len(files)
-    for i, p in enumerate(files, start=1):
-        yield i, total, p
+# ---------- hovedfunksjon ----------
 
 def run_paste(cfg: dict, list_only: bool = False) -> None:
     """
-    Genererer én eller flere paste_XXXX.txt i 'paste_out' (eller valgt out_dir).
-    - Skriver ingen filer når list_only=True; da listas kun kandidatfiler.
-    - Hver paste-fil holder seg under paste.max_lines (default 4000).
+    Skriver paste_out/paste_N.txt og en samlet paste_out/index.txt
+
+    cfg-uttak:
+      - toppnivå: project_root, exclude_dirs, exclude_files
+      - under "paste": out_dir, max_lines, allow_binary, filename_search, include, exclude, only_globs, skip_globs
     """
-    pcfg = _read_cfg(cfg)
-    root = pcfg.project_root
+    root = Path(cfg.get("project_root", ".")).resolve()
+    pc = cfg.get("paste", {}) or {}
+    out_dir = pc.get("out_dir", "paste_out")
+    out_abs = Path(out_dir) if Path(out_dir).is_absolute() else (root / out_dir)
 
-    if not root.exists() or not root.is_dir():
-        print(f"[paste] Ugyldig project root: {root}")
-        return
-
-    files = _gather_candidates(
-        root=root,
-        include=pcfg.include,
-        exclude=pcfg.exclude,
-        only_globs=pcfg.only_globs,
-        skip_globs=pcfg.skip_globs,
+    pcfg = PasteCfg(
+        project_root=root,
+        out_dir=out_abs,
+        max_lines=int(pc.get("max_lines", 4000)),
+        allow_binary=bool(pc.get("allow_binary", False)),
+        filename_search=bool(pc.get("filename_search", False)),
+        include=list(pc.get("include", []) or []),
+        exclude=list(pc.get("exclude", []) or []),
+        only_globs=list(pc.get("only_globs", []) or []),
+        skip_globs=list(pc.get("skip_globs", []) or []),
+        global_exclude_dirs=list(cfg.get("exclude_dirs", []) or []),
+        global_exclude_files=list(cfg.get("exclude_files", []) or []),
     )
 
-    # Listevisning
+    files = _gather_files(pcfg)
+
     if list_only:
-        print(f"[paste] Project: {root}")
-        print(f"[paste] Matchede filer: {len(files)}")
-        for p in files:
+        print(f"Prosjekt: {root}")
+        print(f"Antall filer: {len(files)}")
+        for f in files:
             try:
-                print(p.resolve().relative_to(root.resolve()).as_posix())
+                print(f.relative_to(root).as_posix())
             except Exception:
-                print(p.as_posix())
+                print(str(f))
         return
 
-    writer = ChunkWriter(pcfg.out_dir, pcfg.max_lines)
-    skipped_bin: list[str] = []
-    written_count = 0
+    pcfg.out_dir.mkdir(parents=True, exist_ok=True)
 
-    try:
-        for idx, total, path in _iter_indexed(files):
-            is_text, payload = _read_utf8_strict(path)
-            if not is_text and not pcfg.allow_binary:
-                # hopp over binære filer
-                rel = path.resolve().relative_to(root.resolve()).as_posix()
-                skipped_bin.append(rel)
-                continue
+    # Skriv rullerende paste_XX.txt
+    index_rows: list[str] = []
+    paste_idx = 1
+    lines_in_current = 0
+    cur: io.StringIO | None = None
+    cur_path: Path | None = None
 
-            if is_text:
-                text = payload if isinstance(payload, str) else payload.decode("utf-8", errors="replace")
-            else:
-                # base64-innpakkede binærfiler som tekst
-                assert isinstance(payload, (bytes, bytearray))
-                text = _format_binary_block(bytes(payload), root, path)
+    def _open_new() -> tuple[io.StringIO, Path]:
+        nonlocal paste_idx, lines_in_current
+        if cur is not None:
+            raise RuntimeError("internal: cur must be None before open_new()")
+        p = pcfg.out_dir / f"paste_{paste_idx:02d}.txt"
+        paste_idx += 1
+        lines_in_current = 0
+        return io.StringIO(), p
 
-            writer.write_block(
-                project_root=root,
-                file_path=path,
-                content_text=text.rstrip("\n"),
-                chunk_idx=idx,
-                chunk_total=total,
-            )
-            written_count += 1
-    finally:
-        writer.close()
+    def _flush(buf: io.StringIO, path: Path) -> int:
+        text = buf.getvalue()
+        path.write_text(text, encoding="utf-8")
+        return text.count("\n") + (0 if text.endswith("\n") else 1)
 
-    # Oppsummering
-    print(f"[paste] Project: {root}")
-    print(f"[paste] Filer funnet : {len(files)}")
-    print(f"[paste] Filer skrevet: {written_count}")
-    if skipped_bin:
-        print(f"[paste] Hoppet over binær (allow_binary=false): {len(skipped_bin)}")
-        for rel in skipped_bin:
-            print(f"  - {rel}")
-    out_files = writer.written_files
-    if out_files:
-        print("[paste] Output:")
-        for p in out_files:
-            print(f"  - {p}")
-    else:
-        print("[paste] Ingen output generert (ingen matchende filer).")
+    # visuelt: liste filer
+    print(f"Prosjekt: {root}")
+    print(f"Out:      {pcfg.out_dir}")
+    print(f"Filer:    {len(files)}")
+    print("== Filer ==")
+    for f in files:
+        try:
+            print(f" - {f.relative_to(root).as_posix()}")
+        except Exception:
+            print(f" - {str(f)}")
+    print("")
+
+    for file_path in files:
+        # binærhåndtering
+        if not pcfg.allow_binary and _is_binary(file_path):
+            continue
+
+        # åpne rullerende fil hvis nødvendig
+        if cur is None:
+            cur, cur_path = _open_new()
+
+        try:
+            rel = file_path.relative_to(root).as_posix()
+        except Exception:
+            continue
+
+        text, line_count = _read_text(file_path)
+        sha = _sha256_bytes(text.encode("utf-8", errors="replace"))
+
+        header = [
+            "===== BEGIN FILE =====",
+            f"PATH: {rel}",
+            f"LINES: {line_count}",
+            "CHUNK: 1/1",
+            f"SHA256: {sha}",
+            "----- BEGIN CODE -----",
+        ]
+        footer = ["----- END CODE -----", "===== END FILE ====="]
+        block_lines = len(header) + len(footer) + line_count
+
+        # Ruller hvis nødvendig
+        if lines_in_current + block_lines > pcfg.max_lines:
+            if cur is not None and cur_path is not None:
+                flushed = _flush(cur, cur_path)
+                print(f"skrev {cur_path.name}  ({flushed} linjer)")
+            cur = None
+            cur_path = None
+            cur, cur_path = _open_new()
+
+        # Skriv blokk
+        for ln in header:
+            cur.write(ln + "\n")
+        cur.write(text)
+        if not text.endswith("\n"):
+            cur.write("\n")
+        for ln in footer:
+            cur.write(ln + "\n")
+        lines_in_current += block_lines
+
+        # index-rad
+        index_rows.append(f"{rel}  |  {cur_path.name}  |  {line_count} linjer")
+
+    # flush siste
+    generated_files: list[Path] = []
+    if cur is not None and cur_path is not None:
+        flushed = _flush(cur, cur_path)
+        generated_files.append(cur_path)
+        print(f"skrev {cur_path.name}  ({flushed} linjer)")
+    # plukk opp evt. tidligere filer (i tilfelle mange rulleringer)
+    for n in range(1, paste_idx - 1):
+        generated_files.append(pcfg.out_dir / f"paste_{n:02d}.txt")
+
+    # skriv index.txt for ALLE
+    idx_path = pcfg.out_dir / "index.txt"
+    idx = io.StringIO()
+    idx.write("# index over innhold i paste_*.txt\n")
+    idx.write("# format: <relativ/path> | <paste_fil> | <linjer>\n\n")
+    for row in index_rows:
+        idx.write(row + "\n")
+    idx.write("\n# Genererte filer:\n")
+    for p in sorted(set(generated_files), key=lambda q: q.name):
+        idx.write(p.name + "\n")
+    idx.write(f"\nTotalt filer: {len(index_rows)}\n")
+    idx.write(f"Antall paste-filer: {len(set(generated_files))}\n")
+    idx_path.write_text(idx.getvalue(), encoding="utf-8")
+
+    # slutt-rapport til stdout (UI)
+    print("\n== Oppsummering ==")
+    print(f"Totalt filer: {len(index_rows)}")
+    total_lines = 0
+    for row in index_rows:
+        try:
+            total_lines += int(row.rsplit("|", 1)[-1].strip().split()[0])
+        except Exception:
+            pass
+    print(f"Totalt linjer: {total_lines}")
+    print(f"Antall paste-filer: {len(set(generated_files))}")
+    print(f"Index: {idx_path.relative_to(pcfg.project_root).as_posix()}")

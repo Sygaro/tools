@@ -100,6 +100,92 @@ async function fetchGitBranches(selectValueIfPresent) {
   if (want && [...sel.options].some((o) => o.value === want)) sel.value = want
   else if (sel.options.length) sel.value = sel.options[0].value
 }
+/* ---------- GH Raw helpers ---------- */
+function ghMode() {
+  return (document.getElementById('gh_mode')?.value || 'project').toLowerCase()
+}
+function showGhPanels() {
+  const mode = ghMode()
+  document.getElementById('gh_project_box').style.display = mode === 'project' ? '' : 'none'
+  document.getElementById('gh_manual_box').style.display = mode === 'manual' ? '' : 'none'
+}
+function syncGhRemotesFromGit() {
+  const src = document.getElementById('git_remote')
+  const dst = document.getElementById('gh_remote')
+  if (!src || !dst) return
+  const curVal = dst.value
+  dst.innerHTML = ''
+  Array.from(src.options).forEach((opt) => {
+    const o = document.createElement('option')
+    o.value = opt.value
+    o.textContent = opt.textContent
+    dst.appendChild(o)
+  })
+  // prøv å behold valgt verdi
+  if ([...dst.options].some((o) => o.value === curVal)) dst.value = curVal
+  else if (dst.options.length) dst.value = dst.options[0].value
+}
+
+async function fetchGhRepoInfo() {
+  const proj = currentProject()
+  const remote = document.getElementById('gh_remote')?.value || 'origin'
+  let d
+  try {
+    const r = await fetch(
+      `/api/gh-raw/repo-info?project=${encodeURIComponent(proj)}&remote=${encodeURIComponent(remote)}`
+    )
+    if (!r.ok) {
+      const txt = await r.text().catch(() => '')
+      throw new Error(`HTTP ${r.status} ${r.statusText}${txt ? ` – ${txt.slice(0, 300)}` : ''}`)
+    }
+    const ct = r.headers.get('content-type') || ''
+    if (!ct.includes('application/json')) {
+      const txt = await r.text().catch(() => '')
+      throw new Error(`Forventet JSON men fikk ${ct || 'ukjent'}. ${txt.slice(0, 300)}`)
+    }
+    d = await r.json()
+  } catch (e) {
+    console.error('[gh-raw] repo-info failed:', e)
+    d = { error: String(e?.message || e), branches: [], current_branch: null }
+  }
+
+  // label owner/repo
+  const lbl = document.getElementById('gh_repo_label')
+  if (d.error) {
+    if (lbl) lbl.textContent = `owner/repo: (feil) ${d.error}`
+    setStatus('gh-raw', 'err')
+  } else {
+    if (lbl) lbl.textContent = `owner/repo: ${d.owner}/${d.repo}`
+    setStatus('gh-raw', 'ok')
+  }
+
+  // branch-listen
+  const sel = document.getElementById('gh_branch_select')
+  if (sel) {
+    sel.innerHTML = ''
+    ;(d.branches || []).forEach((name) => {
+      const o = document.createElement('option')
+      o.value = name
+      o.textContent = name === d.current_branch ? `${name} (current)` : name
+      sel.appendChild(o)
+    })
+    const want =
+      (localStorage.getItem(PREF_KEY(currentProject())) &&
+        JSON.parse(localStorage.getItem(PREF_KEY(currentProject()))).gh_branch) ||
+      d.current_branch
+    if (want && [...sel.options].some((o) => o.value === want)) sel.value = want
+    else if (sel.options.length) sel.value = sel.options[0].value
+
+    if (d.error && sel.options.length === 0) {
+      const o = document.createElement('option')
+      o.value = ''
+      o.textContent = '(ingen branches)'
+      sel.appendChild(o)
+      sel.value = ''
+    }
+  }
+}
+
 
 /* Oppskrifter dropdown */
 async function fetchRecipes() {
@@ -321,6 +407,12 @@ function savePrefs() {
     clean_skip: document.getElementById('clean_skip').value,
     gh_prefix: document.getElementById('gh_prefix').value,
     gh_wrap_read: document.getElementById('gh_wrap_read')?.checked,
+    gh_mode: document.getElementById('gh_mode')?.value,
+    gh_remote: document.getElementById('gh_remote')?.value,
+    gh_user: document.getElementById('gh_user')?.value,
+    gh_repo: document.getElementById('gh_repo')?.value,
+    gh_branch: document.getElementById('gh_branch_select')?.value || document.getElementById('gh_branch_manual')?.value,
+
     rep_find: document.getElementById('rep_find')?.value,
     rep_repl: document.getElementById('rep_repl')?.value,
     rep_regex: document.getElementById('rep_regex')?.checked,
@@ -392,6 +484,13 @@ function loadPrefs() {
     set('clean_skip', p.clean_skip)
     set('gh_prefix', p.gh_prefix)
     set('gh_wrap_read', p.gh_wrap_read, true)
+    set('gh_mode', p.gh_mode)
+    set('gh_remote', p.gh_remote)
+    set('gh_user', p.gh_user)
+    set('gh_repo', p.gh_repo)
+    set('gh_branch_manual', p.gh_branch) // manuell felt
+    // branch i prosjekt-modus settes dynamisk etter fetch av repo-info
+
     set('rep_find', p.rep_find)
     set('rep_repl', p.rep_repl)
     set('rep_regex', p.rep_regex, true)
@@ -698,6 +797,49 @@ async function loadFormatUIFromConfig() {
     console.warn('[format] Kunne ikke laste format_config.json:', e)
   }
 }
+function renderPasteSummary(result) {
+  let box = document.getElementById('paste_summary')
+  if (!box) {
+    const out = document.getElementById('out_paste')
+    if (out && out.parentElement) {
+      box = document.createElement('pre')
+      box.id = 'paste_summary'
+      box.className = 'summary'
+      box.style.marginTop = '8px'
+      box.style.whiteSpace = 'pre-wrap'
+      out.parentElement.appendChild(box)
+    }
+  }
+  if (!box) return
+  const s = (result && result.summary) || {}
+  const parts = []
+  if (s.files != null) parts.push(`Filer: ${s.files}`)
+  if (s.lines != null) parts.push(`Linjer: ${s.lines}`)
+  if (s.paste_files != null) parts.push(`Paste-filer: ${s.paste_files}`)
+  box.textContent = parts.length ? parts.join(' · ') : ''
+}
+
+function normalizeGlobsForFilenameSearch(list) {
+  // For mønstre uten skråstrek (typisk ".env", ".gitignore", "README.md"):
+  // legg til både "./<fil>" (root) og "**/<fil>" (alle underkataloger).
+  const out = []
+  for (const raw of list) {
+    const pat = raw.trim()
+    if (!pat) continue
+    // hopp over hvis brukeren allerede har spesifisert sti/wildcard
+    const hasSlash = pat.includes('/')
+    const hasGlob = /[*?\[\]{},]/.test(pat)
+    if (!hasSlash && !hasGlob) {
+      out.push(`./${pat}`)     // root
+      out.push(`**/${pat}`)    // hvor som helst
+    } else {
+      out.push(pat)
+    }
+  }
+  // fjern duplikater
+  return Array.from(new Set(out))
+}
+
 
 /* Samle UI → format-config (felles struktur) */
 function gatherFormatUIToConfig() {
@@ -820,7 +962,7 @@ const PREF_FIELDS = `
 project search_terms search_all search_case search_max search_files_only search_path_mode
 search_limit_dirs search_limit_exts search_include search_exclude search_filename_search
 rep_filename_search paste_list_only paste_filename_search paste_max paste_out paste_include paste_exclude
-format_dry clean_what clean_skip gh_prefix gh_wrap_read
+format_dry clean_what clean_skip gh_prefix gh_wrap_read gh_mode gh_remote gh_user gh_repo gh_branch
 rep_find rep_repl rep_regex rep_case rep_backup rep_dry rep_showdiff rep_max rep_include rep_exclude
 fmt_prettier_enable fmt_prettier_globs fmt_prettier_printWidth fmt_prettier_tabWidth fmt_prettier_singleQuote fmt_prettier_semi fmt_prettier_trailingComma
 fmt_black_enable fmt_black_paths fmt_black_line_length fmt_black_target
@@ -843,6 +985,9 @@ document.getElementById('project').addEventListener('change', async () => {
   await fetchGitRemotes()
   await fetchGitBranches()
   await fetchCleanConfig()
+  syncGhRemotesFromGit()
+  await fetchGhRepoInfo()
+  showGhPanels()
 })
 
 /* Clean modus-warning */
@@ -863,6 +1008,11 @@ document.getElementById('refresh').onclick = async () => {
   await fetchCleanConfig()
   await loadSettings()
   await loadFormatUIFromConfig()
+    await fetchGitRemotes()
+  await fetchGitBranches()
+  syncGhRemotesFromGit()
+  await fetchGhRepoInfo()
+
   loadPrefs()
 }
 
@@ -975,19 +1125,22 @@ document.getElementById('run_paste').onclick = () =>
     if (out) payload.args.out_dir = out
     const mx = parseInt(document.getElementById('paste_max').value || '4000', 10)
     if (!Number.isNaN(mx)) payload.args.max_lines = mx
-    payload.args.filename_search = !!document.getElementById('paste_filename_search').checked
-    const inc = document
-      .getElementById('paste_include')
-      .value.split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-    if (inc.length) payload.args.include = inc
-    const exc = document
-      .getElementById('paste_exclude')
-      .value.split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-    if (exc.length) payload.args.exclude = exc
+
+    const filenameSearch = !!document.getElementById('paste_filename_search').checked
+    payload.args.filename_search = filenameSearch
+
+    const incRaw = document.getElementById('paste_include').value
+      .split(/\r?\n/).map(s => s.trim()).filter(Boolean)
+    const excRaw = document.getElementById('paste_exclude').value
+      .split(/\r?\n/).map(s => s.trim()).filter(Boolean)
+
+    // 🔧 3b-fix: utvid enkle filnavn når filename_search er aktivt
+    const include = filenameSearch ? normalizeGlobsForFilenameSearch(incRaw) : incRaw
+    const exclude = filenameSearch ? normalizeGlobsForFilenameSearch(excRaw) : excRaw
+
+    if (include.length) payload.args.include = include
+    if (exclude.length) payload.args.exclude = exclude
+
     return runTool('paste', payload, 'out_paste')
   })
 
@@ -1137,17 +1290,31 @@ document.getElementById('run_clean').onclick = () =>
 
 document.getElementById('run_gh').onclick = () =>
   withStatus('gh-raw', 'out_gh', async () => {
-    return runTool(
-      'gh-raw',
-      {
-        args: {
-          path_prefix: document.getElementById('gh_prefix').value.trim(),
-          wrap_read: !!document.getElementById('gh_wrap_read')?.checked,
-        },
-      },
-      'out_gh'
-    )
+    const mode = ghMode()
+    let args = {}
+
+    if (mode === 'project') {
+      args = {
+        mode: 'project',
+        remote: document.getElementById('gh_remote')?.value || 'origin',
+        branch: document.getElementById('gh_branch_select')?.value || 'main',
+        path_prefix: document.getElementById('gh_prefix')?.value.trim(),
+        wrap_read: !!document.getElementById('gh_wrap_read')?.checked,
+      }
+    } else {
+      args = {
+        mode: 'manual',
+        user: document.getElementById('gh_user')?.value.trim(),
+        repo: document.getElementById('gh_repo')?.value.trim(),
+        branch: document.getElementById('gh_branch_manual')?.value.trim() || 'main',
+        path_prefix: document.getElementById('gh_prefix_manual')?.value.trim(),
+        wrap_read: !!document.getElementById('gh_wrap_read_manual')?.checked,
+      }
+    }
+
+    return runTool('gh-raw', { args }, 'out_gh')
   })
+
 
 if (document.getElementById('run_backup')) {
   document.getElementById('run_backup').onclick = () =>
@@ -1314,6 +1481,20 @@ setLamp('status_init', 'busy')
       setActiveTool(s?.global?.default_tool || 'search')
     }
     await loadSettings()
+    // GH Raw UI events
+document.getElementById('gh_mode').addEventListener('change', () => {
+  showGhPanels()
+  savePrefs()
+})
+document.getElementById('gh_remote').addEventListener('change', async () => {
+  await fetchGhRepoInfo()
+  savePrefs()
+})
+    syncGhRemotesFromGit()
+    await fetchGhRepoInfo()
+    showGhPanels()
+
+
     await loadFormatUIFromConfig()
     loadPrefs()
     await loadFormatFromConfig(true)

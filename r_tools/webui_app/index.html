@@ -398,16 +398,53 @@
               <button class="btn" id="run_gh">List raw-URLer</button>
             </div>
           </div>
-          <div class="tool-body">
-            <label>Path prefix</label>
-            <input id="gh_prefix" type="text" placeholder="app/routes" />
 
-            <div class="inline" style="margin-top: 8px">
+          <div class="tool-body">
+            <div class="grid two">
               <label
-                class="inline"
-                title="Pakk utdata som /read(urls:[…]) med commit-låste blob-URLer (anbefalt når du deler filer med GPT-verktøy)."
-              >
+                >Modus
+                <select id="gh_mode">
+                  <option value="project">Prosjekt (auto)</option>
+                  <option value="manual">(Manuell)</option>
+                </select>
+              </label>
+
+              <label
+                >Remote
+                <select id="gh_remote" title="Hentes fra git-remotes for valgt prosjekt"></select>
+              </label>
+            </div>
+
+            <!-- Prosjekt-modus -->
+            <div id="gh_project_box">
+              <div class="inline" style="margin-top: 8px">
+                <div class="muted" id="gh_repo_label">owner/repo: (ukjent)</div>
+              </div>
+              <div class="grid two" style="margin-top: 8px">
+                <label
+                  >Branch
+                  <select id="gh_branch_select"></select>
+                </label>
+                <label>Path prefix <input id="gh_prefix" type="text" placeholder="app/routes" /></label>
+              </div>
+              <label class="inline" style="margin-top: 8px" title="Pakk utdata som /read(urls:[…]) med commit-låste blob-URLer.">
                 <input id="gh_wrap_read" type="checkbox" />
+                Output som <code>/read(urls:[…])</code>
+              </label>
+            </div>
+
+            <!-- Manuell modus -->
+            <div id="gh_manual_box" style="display: none">
+              <div class="grid two">
+                <label>Owner/user <input id="gh_user" type="text" placeholder="owner" /></label>
+                <label>Repo <input id="gh_repo" type="text" placeholder="repo" /></label>
+              </div>
+              <div class="grid two">
+                <label>Branch <input id="gh_branch_manual" type="text" placeholder="main" /></label>
+                <label>Path prefix <input id="gh_prefix_manual" type="text" placeholder="(valgfritt)" /></label>
+              </div>
+              <label class="inline" style="margin-top: 8px" title="Pakk utdata som /read(urls:[…]) med commit-låste blob-URLer.">
+                <input id="gh_wrap_read_manual" type="checkbox" />
                 Output som <code>/read(urls:[…])</code>
               </label>
             </div>
@@ -716,9 +753,16 @@
           </div>
           <div class="tool-body">
             <ul class="help-list">
-              <li>Generer raw.githubusercontent-URLer for filer under valgt prosjekt.</li>
-              <li><b>Path prefix</b> – begrens til en undermappe (f.eks. <code>app/routes</code>).</li>
-              <li>Resultatet kan limes i README, issues eller verktøy.</li>
+              <li>
+                <b>Modus</b>:
+                <ul>
+                  <li><b>Prosjekt</b> – henter <i>owner/repo</i> fra valgt prosjekts <code>git remote</code> og fyller branch-listen.</li>
+                  <li><b>Manuell</b> – skriv inn <i>user/repo/branch</i> selv.</li>
+                </ul>
+              </li>
+              <li><b>Remote</b> – velg hvilken git-remote som skal brukes (f.eks. <code>origin</code>).</li>
+              <li><b>Path prefix</b> – begrens til undermappe (f.eks. <code>app/routes</code>).</li>
+              <li><b>/read(urls:[…])</b> – generer delbar blokk med commit-låste <code>blob</code>-URLer.</li>
             </ul>
           </div>
         </aside>

@@ -5,7 +5,7 @@
     "max_lines": 4000,
     "allow_binary": false,
     "filename_search": true,
-    "include": ["*.*", "**/*.*"],
+    "include": [],
     "exclude": [
       ".env",
       ".editorconfig",
@@ -14,7 +14,8 @@
       ".pastechunksrc",
       ".prettierrc",
       ".vscode/settings.json",
-      "README_DEV.md"
+      "README_DEV.md",
+      "**/__pycache__/**"
     ],
     "only_globs": [],
     "skip_globs": []

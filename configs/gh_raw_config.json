@@ -4,6 +4,9 @@
     "repo": "tools",
     "branch": "main",
     "path_prefix": "",
-    "wrap_read": false
+    "pin_to_commit": true,
+    "wrap_read": false,
+    "include_globs": ["**/*.py"],
+    "exclude_globs": ["**/venv/**", "**/__pycache__/**"]
   }
 }

@@ -1,10 +1,6 @@
 # ./tools/r_tools/tools/webui.py
 from __future__ import annotations
-
-import io
-import json
-import os
-import time
+import time, subprocess, re, os, json, io 
 from contextlib import redirect_stdout
 from pathlib import Path
 from typing import Any, TypedDict
@@ -26,10 +22,21 @@ from .gh_raw import run_gh_raw
 from .paste_chunks import run_paste
 from .replace_code import run_replace
 
-# Kataloger
+# ──────────────────────────────────────────────────────────────────────────────
+#  Konstanter og mapper
+# ──────────────────────────────────────────────────────────────────────────────
+
 TOOLS_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_DIR = Path(os.environ.get("RTOOLS_CONFIG_DIR", str(TOOLS_ROOT / "configs"))).resolve()
 WEBUI_DIR = TOOLS_ROOT / "r_tools" / "webui_app"
+
+print(f"[webui] TOOLS_ROOT = {TOOLS_ROOT}")
+print(f"[webui] CONFIG_DIR = {CONFIG_DIR}  (env RTOOLS_CONFIG_DIR={os.environ.get('RTOOLS_CONFIG_DIR')!r})")
+print(f"[webui] projects_config.json exists? {(CONFIG_DIR / 'projects_config.json').is_file()}")
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  Forhåndsinnlastet HTML hvis du har egen webui_app/index.html
+# ──────────────────────────────────────────────────────────────────────────────
 
 def _read_text_safe(path: Path) -> str:
     try:
@@ -43,15 +50,19 @@ def _external_index_html() -> str | None:
         return _read_text_safe(idx)
     return None
 
-print(f"[webui] TOOLS_ROOT = {TOOLS_ROOT}")
-print(f"[webui] CONFIG_DIR = {CONFIG_DIR}  (env RTOOLS_CONFIG_DIR={os.environ.get('RTOOLS_CONFIG_DIR')!r})")
-print(f"[webui] projects_config.json exists? {(CONFIG_DIR / 'projects_config.json').is_file()}")
+# ──────────────────────────────────────────────────────────────────────────────
+#  Enkle typer
+# ──────────────────────────────────────────────────────────────────────────────
 
 class ProjectEntry(TypedDict):
     name: str
     path: str
     abs_path: str
     exists: bool
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  Hjelpere for “projects”/“recipes”
+# ──────────────────────────────────────────────────────────────────────────────
 
 def _load_projects() -> list[ProjectEntry]:
     cfg_path = CONFIG_DIR / "projects_config.json"
@@ -80,6 +91,10 @@ def _load_recipes() -> list[dict[str, Any]]:
     data = json.loads(rc.read_text(encoding="utf-8"))
     return list(data.get("recipes", []))
 
+# ──────────────────────────────────────────────────────────────────────────────
+#  Stdout-fangst
+# ──────────────────────────────────────────────────────────────────────────────
+
 def _capture(fn, *args, **kwargs) -> str:
     buf = io.StringIO()
     with redirect_stdout(buf):
@@ -98,6 +113,104 @@ def _safe_clean_paste_out(out_dir: Path) -> None:
     except Exception:
         pass
 
+# ──────────────────────────────────────────────────────────────────────────────
+#  Metrikk-cache (brukes av UI)
+# ──────────────────────────────────────────────────────────────────────────────
+
+LAST_FORMAT_SUMMARY: dict[str, int] = {}
+LAST_PASTE_SUMMARY: dict[str, int] = {}
+
+def _parse_format_metrics(output: str) -> dict[str, int]:
+    """
+    Trekk ut nyttige metrikker fra run_format-output.
+    - Black: 'All done! … <N> files reformatted, …'
+    - Ruff:  'Found X errors (Y fixed, Z remaining).'
+    - Prettier: anslag via 'reformatted <path>' linjer for filer som ikke slutter på .py
+    - Cleanup: 'Cleanup: <changed>/<total> filer endret'
+    """
+    prettier = 0
+    black = 0
+    ruff_fixed = 0
+    ruff_remaining = 0
+    cleanup_changed = 0
+    cleanup_total = 0
+
+    # Black
+    m = re.search(r"\b(\d+)\s+files reformat(?:ted|ted,)", output, flags=re.IGNORECASE)
+    if m:
+        black = int(m.group(1))
+
+    # Ruff (nyttig linje: 'Found 67 errors (67 fixed, 0 remaining).')
+    m = re.search(r"Found\s+\d+\s+errors\s+\((\d+)\s+fixed,\s+(\d+)\s+remaining\)", output, flags=re.IGNORECASE)
+    if m:
+        ruff_fixed = int(m.group(1))
+        ruff_remaining = int(m.group(2))
+
+    # Prettier – tell 'reformatted <path>' for ikke-.py
+    for line in output.splitlines():
+        if line.startswith("reformatted "):
+            path = line.split("reformatted ", 1)[1].strip()
+            if not path.lower().endswith(".py"):  # unngå å blande med Black
+                prettier += 1
+
+    # Cleanup
+    m = re.search(r"Cleanup:\s+(\d+)\/(\d+)\s+filer endret", output, flags=re.IGNORECASE)
+    if m:
+        cleanup_changed = int(m.group(1))
+        cleanup_total = int(m.group(2))
+
+    return {
+        "prettier_formatted": prettier,
+        "black_reformatted": black,
+        "ruff_fixed": ruff_fixed,
+        "ruff_remaining": ruff_remaining,
+        "cleanup_changed": cleanup_changed,
+        "cleanup_total": cleanup_total,
+    }
+
+def _compute_paste_metrics(out_dir: Path) -> dict[str, int]:
+    """
+    Les alle paste_*.txt og beregn:
+      - paste_files: antall paste_*.txt
+      - paste_file_sections: antall '===== BEGIN FILE ====='
+      - paste_code_lines: linjer mellom '----- BEGIN CODE -----' og '----- END CODE -----'
+    """
+    paste_files = 0
+    paste_file_sections = 0
+    paste_code_lines = 0
+
+    files = sorted(out_dir.glob("paste_*.txt"))
+    paste_files = len(files)
+
+    for pf in files:
+        try:
+            txt = pf.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+        paste_file_sections += len(re.findall(r"^===== BEGIN FILE =====", txt, flags=re.MULTILINE))
+
+        # tell kode-linjer mellom BEGIN/END CODE
+        in_code = False
+        for ln in txt.splitlines():
+            if ln.strip() == "----- BEGIN CODE -----":
+                in_code = True
+                continue
+            if ln.strip() == "----- END CODE -----":
+                in_code = False
+                continue
+            if in_code:
+                paste_code_lines += 1
+
+    return {
+        "paste_files": paste_files,
+        "paste_file_sections": paste_file_sections,
+        "paste_code_lines": paste_code_lines,
+    }
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  FastAPI-app
+# ──────────────────────────────────────────────────────────────────────────────
+
 app = FastAPI(title="r_tools UI", default_response_class=JSONResponse)
 app.add_middleware(GZipMiddleware, minimum_size=600)
 
@@ -114,10 +227,22 @@ async def add_static_cache_headers(request: Request, call_next):
         pass
     return response
 
+# ──────────────────────────────────────────────────────────────────────────────
+#  Datamodeller (payloads)
+# ──────────────────────────────────────────────────────────────────────────────
+
 class RunPayload(BaseModel):
     tool: str
     project: str | None = None
     args: dict[str, Any] = {}
+
+class PreviewPayload(BaseModel):
+    project: str | None = None
+    path: str
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  Endepunkter
+# ──────────────────────────────────────────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)
 def index():
@@ -197,6 +322,101 @@ def api_git_remotes(project: str | None = Query(None)):
     except Exception as e:
         return {"error": f"{type(e).__name__}: {e}", "remotes": []}
 
+@app.get("/api/gh-raw/repo-info")
+def api_gh_raw_repo_info(project: str | None = Query(None), remote: str | None = Query("origin")):
+    """
+    Returnerer GitHub-info for valgt prosjekt:
+      { owner, repo, remote_url, current_branch, branches: [...] }
+    Brukes av UI til å fylle rullgardin for branch og vise repo som bekreftelse.
+    """
+    if not project:
+        return {
+            "error": "project er påkrevd",
+            "owner": None,
+            "repo": None,
+            "remote_url": None,
+            "current_branch": None,
+            "branches": [],
+        }
+
+    proj = Path(project).resolve()
+
+    try:
+        # Lokal småhjelpere for git
+        def _run_git(*args: str) -> tuple[int, str]:
+            proc = subprocess.run(
+                ["git", *args],
+                cwd=str(proj),
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+            return proc.returncode, proc.stdout
+
+        # Sjekk repo
+        rc, out = _run_git("rev-parse", "--is-inside-work-tree")
+        if rc != 0 or "true" not in (out or ""):
+            return {
+                "error": f"Ikke et git-repo: {proj}",
+                "owner": None,
+                "repo": None,
+                "remote_url": None,
+                "current_branch": None,
+                "branches": [],
+            }
+
+        # Hent remote URL
+        rc, remote_url = _run_git("remote", "get-url", remote or "origin")
+        if rc != 0:
+            return {
+                "error": f"Fant ikke remote {(remote or 'origin')!r}",
+                "owner": None,
+                "repo": None,
+                "remote_url": None,
+                "current_branch": None,
+                "branches": [],
+            }
+        remote_url = (remote_url or "").strip()
+
+        # Parse owner/repo
+        try:
+            from .gh_raw import _parse_github_remote  # gjenbruk parser
+            owner, repo = _parse_github_remote(remote_url)
+        except Exception as e:
+            return {
+                "error": f"Kan ikke parse GitHub-remote: {e}",
+                "owner": None,
+                "repo": None,
+                "remote_url": remote_url,
+                "current_branch": None,
+                "branches": [],
+            }
+
+        # Branches + current
+        rc, cur = _run_git("rev-parse", "--abbrev-ref", "HEAD")
+        current = (cur or "").strip() if rc == 0 else None
+
+        rc, b_out = _run_git("branch", "--format", "%(refname:short)")
+        branches = [ln.strip() for ln in (b_out or "").splitlines() if ln.strip()] if rc == 0 else []
+
+        return {
+            "owner": owner,
+            "repo": repo,
+            "remote_url": remote_url,
+            "current_branch": current,
+            "branches": branches,
+        }
+    except Exception as e:
+        # Siste skanse: alltid JSON (unngå HTML 500)
+        return {
+            "error": f"{type(e).__name__}: {e}",
+            "owner": None,
+            "repo": None,
+            "remote_url": None,
+            "current_branch": None,
+            "branches": [],
+        }
+
 @app.post("/api/run")
 def api_run(body: RunPayload):
     tool = body.tool
@@ -242,20 +462,86 @@ def api_run(body: RunPayload):
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
         elif tool == "paste":
-            pov: dict[str, Any] = {"paste": {}}
+            # bygg config med ev. overrides fra UI
+            rov: dict[str, Any] = {"paste": {}}
             for key in ["out_dir", "max_lines", "include", "exclude", "filename_search"]:
                 if key in args and args[key] not in (None, ""):
                     if key in ("include", "exclude") and args[key] == []:
                         continue
-                    pov["paste"][key] = args[key]
-            cfg = load_config(tool_cfg, project_path, pov if pov["paste"] else None)
+                    rov["paste"][key] = args[key]
+            cfg = load_config(tool_cfg, project_path, rov if rov["paste"] else None)
+
             list_only = bool(args.get("list_only", False))
+
+            project_root = Path(cfg.get("project_root", ".")).resolve()
+            eff_out = Path(cfg.get("paste", {}).get("out_dir", "paste_out"))
+            out_path = (eff_out if eff_out.is_absolute() else (project_root / eff_out)).resolve()
+
             if not list_only:
-                project_root = Path(cfg.get("project_root", ".")).resolve()
-                eff_out = Path(cfg.get("paste", {}).get("out_dir", "paste_out"))
-                out_path = (eff_out if eff_out.is_absolute() else (project_root / eff_out)).resolve()
                 _safe_clean_paste_out(out_path)
+
             out = _capture(run_paste, cfg=cfg, list_only=list_only)
+
+            # Beregn metrikker etter kjøring (kun når vi faktisk genererer filer)
+            metrics: dict[str, int] = {}
+            if not list_only:
+                metrics = _compute_paste_metrics(out_path)
+
+            # cache metrikker for UI
+            global LAST_PASTE_SUMMARY
+            LAST_PASTE_SUMMARY = dict(metrics or {})
+
+            # legg ved enkel tekstlig oppsummering nederst i stdout
+            if metrics:
+                out = (
+                    out.rstrip("\n")
+                    + "\n\n== Sammendrag (paste) ==\n"
+                    + f"Paste-filer: {metrics.get('paste_files', 0)}\n"
+                    + f"Seksjoner   : {metrics.get('paste_file_sections', 0)}\n"
+                    + f"Kodelinjer  : {metrics.get('paste_code_lines', 0)}\n"
+                )
+
+            dt = int((time.time() - t0) * 1000)
+            return {"output": out, "summary": {"rc": 0, "duration_ms": dt, **metrics}}
+        elif tool == "gh-raw":
+            # Ny: to moduser
+            #  - mode = "project": hent owner/repo fra git-remote for valgt project_root
+            #  - mode = "manual" : bruk user/repo/branch fra args eller config (bakoverkompatibelt)
+            mode = (args.get("mode") or "").strip().lower() or "manual"
+
+            gov: dict[str, Any] = {"gh_raw": {}}
+
+            # Felles: propager path_prefix hvis satt
+            if "path_prefix" in args and args["path_prefix"] is not None:
+                gov["gh_raw"]["path_prefix"] = str(args["path_prefix"])
+
+            # wrap_read: fra UI-flagg eller config
+            wrap = bool(args.get("wrap_read", False))
+
+            if mode == "project":
+                # prosjekt-drevet
+                if project_path:
+                    gov["gh_raw"]["project_root"] = str(project_path)
+                remote = args.get("remote") or "origin"
+                gov["gh_raw"]["remote"] = remote
+                # branch kan være eksplisitt valgt i UI, ellers behold input/ev. config fallback
+                if args.get("branch"):
+                    gov["gh_raw"]["branch"] = str(args["branch"])
+                # Konfig bygges – run_gh_raw vil selv slå opp owner/repo via git om de mangler
+                cfg = load_config("gh_raw_config.json", project_path, gov)
+            else:
+                # manuell: user/repo/branch fra args overstyrer config
+                if args.get("user"):
+                    gov["gh_raw"]["user"] = str(args["user"])
+                if args.get("repo"):
+                    gov["gh_raw"]["repo"] = str(args["repo"])
+                if args.get("branch"):
+                    gov["gh_raw"]["branch"] = str(args["branch"])
+                cfg = load_config("gh_raw_config.json", project_path, gov if gov["gh_raw"] else None)
+                # wrap_read også mulig via config om UI ikke sendte
+                wrap = bool(wrap or (cfg.get("gh_raw", {}) or {}).get("wrap_read", False))
+
+            out = _capture(run_gh_raw, cfg=cfg, wrap_read=wrap)
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
         elif tool == "format":
@@ -264,11 +550,27 @@ def api_run(body: RunPayload):
             if isinstance(override, dict):
                 cfg = deep_merge(cfg, override)
             out = _capture(run_format, cfg=cfg, dry_run=bool(args.get("dry_run", False)))
+
+            metrics = _parse_format_metrics(out)
+
+            # cache → tilgjengelig for /api/format-preview
+            global LAST_FORMAT_SUMMARY
+            LAST_FORMAT_SUMMARY = dict(metrics or {})
+
+            if metrics:
+                out = (
+                    out.rstrip("\n")
+                    + "\n\n== Sammendrag ==\n"
+                    + f"Prettier: {metrics.get('prettier_formatted', 0)} filer formatert\n"
+                    + f"Black:    {metrics.get('black_reformatted', 0)} filer reformattet\n"
+                    + f"Ruff:     {metrics.get('ruff_fixed', 0)} fikset, {metrics.get('ruff_remaining', 0)} gjenstår\n"
+                    + f"Cleanup:  {metrics.get('cleanup_changed', 0)}/{metrics.get('cleanup_total', 0)} filer endret\n"
+                )
             dt = int((time.time() - t0) * 1000)
             rc = 0
             if "Traceback (most recent call last)" in out or "[error]" in out:
                 rc = 2
-            return {"output": out, "summary": {"rc": rc, "duration_ms": dt}}
+            return {"output": out, "summary": {"rc": rc, "duration_ms": dt, **metrics}}
         elif tool == "clean":
             cov: dict[str, Any] = {"clean": {}}
             if "targets" in args and isinstance(args["targets"], dict):
@@ -288,21 +590,6 @@ def api_run(body: RunPayload):
             rc, text = run_backup(args or {})
             dt = int((time.time() - t0) * 1000)
             return {"output": text, "rc": rc, "summary": {"rc": rc, "duration_ms": dt}}
-        elif tool == "gh-raw":
-            # Send UI-overstyringer videre (path_prefix + wrap_read)
-            gov: dict[str, Any] = {"gh_raw": {}}
-            if "path_prefix" in args and args["path_prefix"] is not None:
-                gov["gh_raw"]["path_prefix"] = str(args["path_prefix"])
-
-            cfg = load_config(tool_cfg, project_path, gov if gov["gh_raw"] else None)
-
-            # flagg fra UI (checkbox) eller evt. fra config
-            wrap = bool(args.get("wrap_read", False) or (cfg.get("gh_raw", {}) or {}).get("wrap_read", False))
-
-            # Ny signatur i gh_raw.run_gh_raw: (cfg, wrap_read: bool = False)
-            out = _capture(run_gh_raw, cfg=cfg, wrap_read=wrap)
-            dt = int((time.time() - t0) * 1000)
-            return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
         elif tool == "replace":
             rov: dict[str, Any] = {"replace": {}}
             for k_src, k_dst in [("include", "include"), ("exclude", "exclude"), ("max_size", "max_size")]:
@@ -326,10 +613,7 @@ def api_run(body: RunPayload):
             )
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
-
-        # i api_run (git-grenen)
         elif tool == "git":
-            # RIKTIG import
             from .git_tools import run_git
 
             cfg = load_config(tool_cfg, project_path, None)
@@ -341,10 +625,6 @@ def api_run(body: RunPayload):
     except Exception as e:
         dt = int((time.time() - t0) * 1000)
         return {"error": f"{type(e).__name__}: {e}", "summary": {"rc": 1, "duration_ms": dt}}
-
-class PreviewPayload(BaseModel):
-    project: str | None = None
-    path: str
 
 @app.post("/api/format-preview")
 def api_format_preview(body: PreviewPayload):
@@ -363,9 +643,9 @@ def api_format_preview(body: PreviewPayload):
 
     try:
         text = format_preview(cfg, rel_path=rel)
-        return {"output": text}
+        return {"output": text, "summary": dict(LAST_FORMAT_SUMMARY)}
     except Exception as e:
-        return {"error": f"{type(e).__name__}: {e}"}
+        return {"error": f"{type(e).__name__}: {e}", "summary": dict(LAST_FORMAT_SUMMARY)}
 
 @app.get("/api/backup-info")
 def api_backup_info():
@@ -535,3 +815,16 @@ def api_settings_save(body: dict[str, Any]):
     backup_path.write_text(json.dumps(b_all, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
     return {"ok": True}
+
+@app.get("/api/last-summaries")
+def api_last_summaries():
+    # returnerer siste kjente summeringer for format/paste (cachet i prosessen)
+    try:
+        from .webui import LAST_FORMAT_SUMMARY, LAST_PASTE_SUMMARY  # type: ignore
+    except Exception:
+        # hvis denne funksjonen ligger i samme modul, kan vi bare referere direkte
+        pass
+    return {
+        "format": dict(LAST_FORMAT_SUMMARY),
+        "paste": dict(LAST_PASTE_SUMMARY),
+    }

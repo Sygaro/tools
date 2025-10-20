@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import subprocess
 from collections.abc import Iterable
+from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -35,7 +38,6 @@ def _resolve_commit_sha(user: str, repo: str, branch: str, token: str | None) ->
     """
     Slå opp siste commit-SHA for en branch.
     """
-    # /repos/{owner}/{repo}/branches/{branch} gir commit.sha
     url = f"https://api.github.com/repos/{user}/{repo}/branches/{branch}"
     try:
         data = _req(url, token)
@@ -69,6 +71,44 @@ def _filter_paths(nodes: Iterable[dict[str, Any]], path_prefix: str | None) -> l
             out.append(p)
     return out
 
+# ---------- Prosjekt-drevet oppløsning av owner/repo/branch ----------
+
+_GH_SSH_RE = re.compile(r"^git@github\.com:(?P<owner>[^/]+)/(?P<repo>[^/]+?)(?:\.git)?$", re.IGNORECASE)
+_GH_HTTPS_RE = re.compile(r"^https://github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+?)(?:\.git)?$", re.IGNORECASE)
+
+def _parse_github_remote(remote_url: str) -> tuple[str, str]:
+    """
+    Parse 'git remote get-url <remote>' for GitHub → (owner, repo)
+    Støtter SSH og HTTPS. Kaster ValueError dersom URL ikke peker til github.com.
+    """
+    s = (remote_url or "").strip()
+    m = _GH_SSH_RE.match(s) or _GH_HTTPS_RE.match(s)
+    if not m:
+        raise ValueError(f"Ikke en GitHub-remote: {remote_url!r}")
+    owner = m.group("owner")
+    repo = m.group("repo")
+    return owner, repo
+
+def _git(root: Path, *args: str) -> tuple[int, str]:
+    proc = subprocess.run(["git", *args], cwd=str(root), text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    return proc.returncode, proc.stdout
+
+def resolve_github_from_project(root: Path, remote: str = "origin") -> tuple[str, str, str]:
+    """
+    Returner (owner, repo, remote_url) for gitt prosjekt-root og remote.
+    Kaster ved ikke-git eller hvis remote ikke peker til github.com.
+    """
+    rc, out = _git(root, "rev-parse", "--is-inside-work-tree")
+    if rc != 0 or "true" not in (out or ""):
+        raise RuntimeError(f"Ikke et git-repo: {root}")
+    rc, url = _git(root, "remote", "get-url", remote)
+    if rc != 0:
+        raise RuntimeError(f"Kunne ikke hente remote '{remote}' i {root}")
+    owner, repo = _parse_github_remote((url or "").strip())
+    return owner, repo, (url or "").strip()
+
+# ---------- Hovedkjøring ----------
+
 def run_gh_raw(
     cfg: dict,
     *,
@@ -76,24 +116,36 @@ def run_gh_raw(
     as_json: bool | None = None,  # behold for bakoverkomp., men brukes ikke lenger
 ) -> None:
     """
-    Les 'gh_raw' fra cfg og skriv enten:
-      - raw.githubusercontent.com-URLer (default), eller
-      - en /read(urls:[ "...blob/<commit>/path", ... ])-blokk når wrap_read=True.
+    To moduser:
+      A) Manuell (som før): cfg['gh_raw'] må inneholde user, repo, branch (og ev. path_prefix)
+      B) Prosjekt-drevet: cfg['gh_raw'] kan mangle user/repo, men ha 'project_root' og 'remote'.
+         Da slås owner/repo opp via git, og branch kan gis eller hentes fra cfg['gh_raw']['branch'].
 
-    Støtter gh_raw.user, gh_raw.repo, gh_raw.branch, gh_raw.path_prefix (+ ev. gh_raw.wrap_read).
+    Output:
+      - rå 'raw.githubusercontent.com'-URLer (default), eller
+      - en /read(urls: [ "…blob/<commit>/path", … ])-blokk når wrap_read=True.
     """
     gh = cfg.get("gh_raw", {}) or {}
+    token = os.environ.get("GITHUB_TOKEN")
+    path_prefix = (gh.get("path_prefix") or "").strip()
+
     user = gh.get("user")
     repo = gh.get("repo")
     branch = gh.get("branch", "main")
-    path_prefix = (gh.get("path_prefix") or "").strip()
-    token = os.environ.get("GITHUB_TOKEN")
 
-    # Tillat at config også kan bestemme wrapping hvis UI ikke sendte flagg
-    wrap_read = bool(wrap_read or gh.get("wrap_read", False))
+    # Prosjekt-drevet fallback (hvis user/repo ikke er satt)
+    if not user or not repo:
+        project_root_str = (gh.get("project_root") or "").strip()
+        remote_name = gh.get("remote", "origin")
+        if project_root_str:
+            project_root = Path(project_root_str).resolve()
+            owner, repo_name, _remote_url = resolve_github_from_project(project_root, remote_name)
+            user = user or owner
+            repo = repo or repo_name
+        # ellers: manuell modus uten prosjekt
 
     if not user or not repo:
-        print("gh_raw: mangler 'user' eller 'repo' i config.")
+        print("gh_raw: mangler 'user' eller 'repo' (hverken manuell konfig eller prosjekt-drevet oppslag ga verdi).")
         return
 
     tree = _fetch_tree(user, repo, branch, token)
