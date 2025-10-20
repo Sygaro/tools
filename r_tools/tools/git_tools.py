@@ -2,17 +2,15 @@
 from __future__ import annotations
 
 import fnmatch
-import sys
 import subprocess
+import sys
 from pathlib import Path
-from typing import Tuple, List
-
 
 # ────────────────────────────────────────────────────────────────────────────
 # Prosesshjelpere
 # ────────────────────────────────────────────────────────────────────────────
 
-def _run_cmd(cmd: List[str], cwd: Path) -> Tuple[int, str]:
+def _run_cmd(cmd: list[str], cwd: Path) -> tuple[int, str]:
     """Kjør valgfri kommando og returner (rc, stdout+stderr)."""
     proc = subprocess.run(
         cmd,
@@ -23,8 +21,7 @@ def _run_cmd(cmd: List[str], cwd: Path) -> Tuple[int, str]:
     )
     return proc.returncode, proc.stdout
 
-
-def _run_module_or_cli(name: str, args: List[str], cwd: Path) -> Tuple[int, str]:
+def _run_module_or_cli(name: str, args: list[str], cwd: Path) -> tuple[int, str]:
     """
     Forsøk å kjøre 'python -m <name> <args>' for å unngå PATH-issues (venv-vennlig).
     Fall tilbake til ren CLI KUN når modulen ikke finnes (dvs. 'No module named ...').
@@ -38,17 +35,14 @@ def _run_module_or_cli(name: str, args: List[str], cwd: Path) -> Tuple[int, str]
     # Ellers returner feilkoden fra verktøyet (f.eks. linter-funn)
     return rc, out
 
-
-def _git(cwd: Path, *args: str) -> Tuple[int, str]:
+def _git(cwd: Path, *args: str) -> tuple[int, str]:
     """Kjør git og returner (rc, out)."""
     return _run_cmd(["git", *args], cwd)
-
 
 def _ensure_repo(root: Path) -> None:
     rc, out = _git(root, "rev-parse", "--is-inside-work-tree")
     if rc != 0 or "true" not in (out or ""):
         raise RuntimeError(f"Ikke et git-repo: {root}")
-
 
 # ────────────────────────────────────────────────────────────────────────────
 # Enkle git-innpakkere
@@ -60,11 +54,9 @@ def current_branch(root: Path) -> str:
         return ""
     return (out or "").strip()
 
-
 def _is_clean(root: Path) -> bool:
     rc, out = _git(root, "status", "--porcelain")
     return rc == 0 and (out.strip() == "")
-
 
 def list_branches(root: Path) -> list[str]:
     _ensure_repo(root)
@@ -73,7 +65,6 @@ def list_branches(root: Path) -> list[str]:
         return []
     return [ln.strip() for ln in out.splitlines() if ln.strip()]
 
-
 def list_remotes(root: Path) -> list[str]:
     _ensure_repo(root)
     rc, out = _git(root, "remote")
@@ -81,12 +72,10 @@ def list_remotes(root: Path) -> list[str]:
         return []
     return [ln.strip() for ln in out.splitlines() if ln.strip()]
 
-
 def status(root: Path) -> str:
     _ensure_repo(root)
     _, out = _git(root, "status", "-sb")
     return out
-
 
 def diff(root: Path, staged: bool = False) -> str:
     _ensure_repo(root)
@@ -96,18 +85,15 @@ def diff(root: Path, staged: bool = False) -> str:
     _, out = _git(root, *args)
     return out
 
-
 def log(root: Path, n: int = 10) -> str:
     _ensure_repo(root)
     _, out = _git(root, "log", f"-{n}", "--oneline", "--graph", "--decorate")
     return out
 
-
 def fetch(root: Path, remote: str) -> str:
     _ensure_repo(root)
     _, out = _git(root, "fetch", remote)
     return out
-
 
 def pull_rebase(root: Path, remote: str, branch: str, ff_only: bool = True) -> str:
     _ensure_repo(root)
@@ -115,18 +101,15 @@ def pull_rebase(root: Path, remote: str, branch: str, ff_only: bool = True) -> s
     _, out = _git(root, *args)
     return out
 
-
 def push(root: Path, remote: str, branch: str) -> str:
     _ensure_repo(root)
     _, out = _git(root, "push", remote, branch)
     return out
 
-
 def switch(root: Path, branch: str) -> str:
     _ensure_repo(root)
     _, out = _git(root, "switch", branch)
     return out
-
 
 def create_branch(root: Path, name: str, base: str | None = None) -> str:
     _ensure_repo(root)
@@ -135,7 +118,6 @@ def create_branch(root: Path, name: str, base: str | None = None) -> str:
     else:
         _, out = _git(root, "switch", "-c", name)
     return out
-
 
 def merge_to(root: Path, source: str, target: str, ff_only: bool = True) -> str:
     _ensure_repo(root)
@@ -149,7 +131,6 @@ def merge_to(root: Path, source: str, target: str, ff_only: bool = True) -> str:
     _, out2 = _git(root, *args)
     return out + out2
 
-
 def add_commit(root: Path, message: str) -> str:
     _ensure_repo(root)
     if not message.strip():
@@ -159,13 +140,11 @@ def add_commit(root: Path, message: str) -> str:
     # Ikke hev feil her; returner output slik at UI ser “ingenting å commit’e” etc.
     return out_a + out_c
 
-
 def add_commit_push(root: Path, remote: str, branch: str, message: str) -> str:
     txt = add_commit(root, message)
     _, out_p = _git(root, "push", remote, branch)
     _, out_s = _git(root, "status", "-sb")
     return txt + out_p + out_s
-
 
 # ────────────────────────────────────────────────────────────────────────────
 # Beskyttede branches, pre-push sjekk, stash & switch, resolve-helper
@@ -183,7 +162,6 @@ def _is_protected(branch: str, patterns: list[str]) -> bool:
         elif b == pat:
             return True
     return False
-
 
 def pre_push_check(root: Path, run_tests: bool = False) -> tuple[int, str]:
     """
@@ -209,7 +187,6 @@ def pre_push_check(root: Path, run_tests: bool = False) -> tuple[int, str]:
             rc_total = rc
     return rc_total, ("\n".join(out_all) + ("\n" if out_all else ""))
 
-
 def stash_switch(root: Path, branch: str, message: str | None = None) -> str:
     _ensure_repo(root)
     if not branch:
@@ -218,7 +195,6 @@ def stash_switch(root: Path, branch: str, message: str | None = None) -> str:
     _git(root, "stash", "push", "-u", "-m", msg)
     _, out = _git(root, "switch", branch)
     return f"[git] stash push: {msg}\n" + out
-
 
 def resolve_helper(root: Path) -> str:
     _ensure_repo(root)
@@ -244,7 +220,6 @@ def resolve_helper(root: Path) -> str:
         guide.append("  - Aksepter 'theirs':      git checkout --theirs <fil> && git add <fil>")
         guide.append("  - Aksepter 'ours':        git checkout --ours  <fil> && git add <fil>")
     return "\n".join(guide) + "\n"
-
 
 # ────────────────────────────────────────────────────────────────────────────
 # Hoved-kommando

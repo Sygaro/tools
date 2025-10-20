@@ -497,7 +497,7 @@ def api_run(body: RunPayload):
                 # grovt anslag fra stdout
                 files = len(re.findall(r"^===== BEGIN FILE =====", out, flags=re.M))
                 chunks = len(re.findall(r"^CHUNK:\s+\d+/\d+", out, flags=re.M))
-                metrics = {"paste_files": files, "paste_file_sections": files, "paste_code_lines": 0,  "paste_chunks": chunks}
+                metrics = {"paste_files": files, "paste_file_sections": files, "paste_code_lines": 0, "paste_chunks": chunks}
 
             # cache metrikker for UI
             global LAST_PASTE_SUMMARY
