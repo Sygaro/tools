@@ -1,21 +1,53 @@
 # ./tools/r_tools/tools/git_tools.py
 from __future__ import annotations
 
+import sys
 import fnmatch
 import subprocess
 from pathlib import Path
+from typing import List, Tuple
 
-def _run(cmd: list[str], cwd: Path) -> tuple[int, str]:
-    proc = subprocess.run(cmd, cwd=str(cwd), text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    return proc.returncode, proc.stdout
 
-def _git(cwd: Path, *args: str) -> tuple[int, str]:
-    return _run(["git", *args], cwd)
+# ──────────────────────────────────────────────────────────────────────────────
+# Kjørehjelpere (robuste mot PATH/venv)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _run_argv(cwd: Path, argv: List[str]) -> Tuple[int, str]:
+    """
+    Kjør en ferdig argv-liste. Returnerer (returncode, samlet stdout/stderr).
+    """
+    proc = subprocess.run(
+        argv,
+        cwd=str(cwd),
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    return proc.returncode, proc.stdout or ""
+
+
+def _run_module(cwd: Path, module: str, args: List[str]) -> Tuple[int, str]:
+    """
+    Kjør 'python -m <module> <args>' i aktivt miljø (sys.executable).
+    Dette unngår PATH-problemer for black/ruff/pytest osv.
+    """
+    argv = [sys.executable, "-m", module, *args]
+    return _run_argv(cwd, argv)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Git wrappers
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _git(cwd: Path, *args: str) -> Tuple[int, str]:
+    return _run_argv(cwd, ["git", *args])
+
 
 def _ensure_repo(root: Path) -> None:
     rc, out = _git(root, "rev-parse", "--is-inside-work-tree")
     if rc != 0 or "true" not in (out or ""):
         raise RuntimeError(f"Ikke et git-repo: {root}")
+
 
 def current_branch(root: Path) -> str:
     rc, out = _git(root, "rev-parse", "--abbrev-ref", "HEAD")
@@ -23,9 +55,11 @@ def current_branch(root: Path) -> str:
         return ""
     return (out or "").strip()
 
+
 def _is_clean(root: Path) -> bool:
     rc, out = _git(root, "status", "--porcelain")
     return rc == 0 and (out.strip() == "")
+
 
 def list_branches(root: Path) -> list[str]:
     _ensure_repo(root)
@@ -34,6 +68,7 @@ def list_branches(root: Path) -> list[str]:
         return []
     return [ln.strip() for ln in out.splitlines() if ln.strip()]
 
+
 def list_remotes(root: Path) -> list[str]:
     _ensure_repo(root)
     rc, out = _git(root, "remote")
@@ -41,10 +76,12 @@ def list_remotes(root: Path) -> list[str]:
         return []
     return [ln.strip() for ln in out.splitlines() if ln.strip()]
 
+
 def status(root: Path) -> str:
     _ensure_repo(root)
     _, out = _git(root, "status", "-sb")
     return out
+
 
 def diff(root: Path, staged: bool = False) -> str:
     _ensure_repo(root)
@@ -54,31 +91,38 @@ def diff(root: Path, staged: bool = False) -> str:
     rc, out = _git(root, *args)
     return out
 
+
 def log(root: Path, n: int = 10) -> str:
     _ensure_repo(root)
     rc, out = _git(root, "log", f"-{n}", "--oneline", "--graph", "--decorate")
     return out
+
 
 def fetch(root: Path, remote: str) -> str:
     _ensure_repo(root)
     rc, out = _git(root, "fetch", remote)
     return out
 
+
 def pull_rebase(root: Path, remote: str, branch: str, ff_only: bool = True) -> str:
     _ensure_repo(root)
+    # NB: vi bruker --ff-only som default (som opprinnelig)
     args = ["pull", "--ff-only" if ff_only else "--rebase", remote, branch]
     rc, out = _git(root, *args)
     return out
+
 
 def push(root: Path, remote: str, branch: str) -> str:
     _ensure_repo(root)
     rc, out = _git(root, "push", remote, branch)
     return out
 
+
 def switch(root: Path, branch: str) -> str:
     _ensure_repo(root)
     rc, out = _git(root, "switch", branch)
     return out
+
 
 def create_branch(root: Path, name: str, base: str | None = None) -> str:
     _ensure_repo(root)
@@ -87,6 +131,7 @@ def create_branch(root: Path, name: str, base: str | None = None) -> str:
     else:
         rc, out = _git(root, "switch", "-c", name)
     return out
+
 
 def merge_to(root: Path, source: str, target: str, ff_only: bool = True) -> str:
     _ensure_repo(root)
@@ -97,8 +142,9 @@ def merge_to(root: Path, source: str, target: str, ff_only: bool = True) -> str:
     if ff_only:
         args.append("--ff-only")
     args.append(source)
-    rc, out2 = _git(root, *args)
+    rc2, out2 = _git(root, *args)
     return out + out2
+
 
 def add_commit(root: Path, message: str) -> str:
     _ensure_repo(root)
@@ -108,13 +154,17 @@ def add_commit(root: Path, message: str) -> str:
     rc_c, out_c = _git(root, "commit", "-m", message)
     return out_a + out_c
 
+
 def add_commit_push(root: Path, remote: str, branch: str, message: str) -> str:
     txt = add_commit(root, message)
     rc_p, out_p = _git(root, "push", remote, branch)
     rc_s, out_s = _git(root, "status", "-sb")
     return txt + out_p + out_s
 
-# ---------- Nytt: glob-beskyttelse + pre-push sjekk + stash&switch + resolve helper ----------
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Glob-beskyttelse + pre-push sjekk + stash&switch + resolve helper
+# ──────────────────────────────────────────────────────────────────────────────
 
 def _is_protected(branch: str, patterns: list[str]) -> bool:
     b = branch or ""
@@ -122,38 +172,46 @@ def _is_protected(branch: str, patterns: list[str]) -> bool:
         pat = str(pat).strip()
         if not pat:
             continue
-        if "*" in pat or "?" in pat or "[" in pat:
+        if any(ch in pat for ch in "*?["):
             if fnmatch.fnmatch(b, pat):
                 return True
         elif b == pat:
             return True
     return False
 
+
 def pre_push_check(root: Path, run_tests: bool = False) -> tuple[int, str]:
+    """
+    Kjør kodekvalitet før push. Bruker python -m for å sikre korrekt venv.
+    """
     _ensure_repo(root)
-    steps: list[tuple[list[str], str]] = [
-        (["black", "--check", "."], "black --check ."),
-        (["ruff", "check", "."], "ruff check ."),
+
+    steps: list[tuple[str, list[str], str]] = [
+        ("black", ["--check", "."], "black --check ."),
+        ("ruff", ["check", "."], "ruff check ."),
     ]
     if run_tests:
-        steps.append((["pytest", "-q"], "pytest -q"))
+        steps.append(("pytest", ["-q"], "pytest -q"))
 
     rc_total = 0
     out_all: list[str] = []
-    for cmd, label in steps:
-        rc, out = _run(cmd, root)
+    for module, mod_args, label in steps:
+        rc, out = _run_module(root, module, mod_args)
         out_all.append(f"▶ {label}\n{out}")
         if rc != 0 and rc_total == 0:
             rc_total = rc
-    return rc_total, "\n".join(out_all) + ("\n" if out_all else "")
+
+    return rc_total, ("\n".join(out_all) + ("\n" if out_all else ""))
+
 
 def stash_switch(root: Path, branch: str, message: str | None = None) -> str:
     _ensure_repo(root)
     msg = message or f"ui: auto-stash before switch to {branch}"
     _git(root, "stash", "push", "-u", "-m", msg)
-    rc, out = _git(root, "switch", "HEAD")
+    _git(root, "switch", "HEAD")
     rc, out = _git(root, "switch", branch)
     return f"[git] stash push: {msg}\n" + out
+
 
 def resolve_helper(root: Path) -> str:
     _ensure_repo(root)
@@ -180,6 +238,11 @@ def resolve_helper(root: Path) -> str:
         guide.append("  - Aksepter 'ours':        git checkout --ours  <fil> && git add <fil>")
     return "\n".join(guide) + "\n"
 
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Inngang for web-UI
+# ──────────────────────────────────────────────────────────────────────────────
+
 def run_git(cfg: dict, action: str, args: dict) -> str:
     root = Path(cfg.get("project_root", ".")).resolve()
     gcfg = cfg.get("git") or {}
@@ -204,7 +267,7 @@ def run_git(cfg: dict, action: str, args: dict) -> str:
     if action == "pull":
         return pull_rebase(root, remote, branch or base, ff_only=True)
     if action == "push":
-        if _is_protected(branch, protected_patterns) and not bool(args.get("confirm", False)):
+        if _is_protected(branch, protected_patterns) and not bool(args.get("confirm, False")):
             return f"[git] '{branch}' er beskyttet. Sett confirm=true for å pushe.\n"
         if bool(args.get("precheck", False)):
             rc, txt = pre_push_check(root, bool(args.get("precheck_tests", False)))
