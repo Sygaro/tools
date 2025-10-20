@@ -1,46 +1,47 @@
 # ./tools/r_tools/tools/git_tools.py
 from __future__ import annotations
 
-import sys
 import fnmatch
+import sys
 import subprocess
 from pathlib import Path
-from typing import List, Tuple
+from typing import Tuple, List
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Kjørehjelpere (robuste mot PATH/venv)
-# ──────────────────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────
+# Prosesshjelpere
+# ────────────────────────────────────────────────────────────────────────────
 
-def _run_argv(cwd: Path, argv: List[str]) -> Tuple[int, str]:
-    """
-    Kjør en ferdig argv-liste. Returnerer (returncode, samlet stdout/stderr).
-    """
+def _run_cmd(cmd: List[str], cwd: Path) -> Tuple[int, str]:
+    """Kjør valgfri kommando og returner (rc, stdout+stderr)."""
     proc = subprocess.run(
-        argv,
+        cmd,
         cwd=str(cwd),
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )
-    return proc.returncode, proc.stdout or ""
+    return proc.returncode, proc.stdout
 
 
-def _run_module(cwd: Path, module: str, args: List[str]) -> Tuple[int, str]:
+def _run_module_or_cli(name: str, args: List[str], cwd: Path) -> Tuple[int, str]:
     """
-    Kjør 'python -m <module> <args>' i aktivt miljø (sys.executable).
-    Dette unngår PATH-problemer for black/ruff/pytest osv.
+    Forsøk å kjøre 'python -m <name> <args>' for å unngå PATH-issues (venv-vennlig).
+    Fall tilbake til ren CLI KUN når modulen ikke finnes (dvs. 'No module named ...').
     """
-    argv = [sys.executable, "-m", module, *args]
-    return _run_argv(cwd, argv)
+    rc, out = _run_cmd([sys.executable, "-m", name, *args], cwd)
+    if rc == 0:
+        return rc, out
+    # Dersom import feilet, prøv CLI (kan være installert som script)
+    if "No module named" in (out or ""):
+        return _run_cmd([name, *args], cwd)
+    # Ellers returner feilkoden fra verktøyet (f.eks. linter-funn)
+    return rc, out
 
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Git wrappers
-# ──────────────────────────────────────────────────────────────────────────────
 
 def _git(cwd: Path, *args: str) -> Tuple[int, str]:
-    return _run_argv(cwd, ["git", *args])
+    """Kjør git og returner (rc, out)."""
+    return _run_cmd(["git", *args], cwd)
 
 
 def _ensure_repo(root: Path) -> None:
@@ -48,6 +49,10 @@ def _ensure_repo(root: Path) -> None:
     if rc != 0 or "true" not in (out or ""):
         raise RuntimeError(f"Ikke et git-repo: {root}")
 
+
+# ────────────────────────────────────────────────────────────────────────────
+# Enkle git-innpakkere
+# ────────────────────────────────────────────────────────────────────────────
 
 def current_branch(root: Path) -> str:
     rc, out = _git(root, "rev-parse", "--abbrev-ref", "HEAD")
@@ -88,48 +93,47 @@ def diff(root: Path, staged: bool = False) -> str:
     args = ["diff"]
     if staged:
         args.append("--cached")
-    rc, out = _git(root, *args)
+    _, out = _git(root, *args)
     return out
 
 
 def log(root: Path, n: int = 10) -> str:
     _ensure_repo(root)
-    rc, out = _git(root, "log", f"-{n}", "--oneline", "--graph", "--decorate")
+    _, out = _git(root, "log", f"-{n}", "--oneline", "--graph", "--decorate")
     return out
 
 
 def fetch(root: Path, remote: str) -> str:
     _ensure_repo(root)
-    rc, out = _git(root, "fetch", remote)
+    _, out = _git(root, "fetch", remote)
     return out
 
 
 def pull_rebase(root: Path, remote: str, branch: str, ff_only: bool = True) -> str:
     _ensure_repo(root)
-    # NB: vi bruker --ff-only som default (som opprinnelig)
     args = ["pull", "--ff-only" if ff_only else "--rebase", remote, branch]
-    rc, out = _git(root, *args)
+    _, out = _git(root, *args)
     return out
 
 
 def push(root: Path, remote: str, branch: str) -> str:
     _ensure_repo(root)
-    rc, out = _git(root, "push", remote, branch)
+    _, out = _git(root, "push", remote, branch)
     return out
 
 
 def switch(root: Path, branch: str) -> str:
     _ensure_repo(root)
-    rc, out = _git(root, "switch", branch)
+    _, out = _git(root, "switch", branch)
     return out
 
 
 def create_branch(root: Path, name: str, base: str | None = None) -> str:
     _ensure_repo(root)
     if base:
-        rc, out = _git(root, "switch", "-c", name, base)
+        _, out = _git(root, "switch", "-c", name, base)
     else:
-        rc, out = _git(root, "switch", "-c", name)
+        _, out = _git(root, "switch", "-c", name)
     return out
 
 
@@ -142,7 +146,7 @@ def merge_to(root: Path, source: str, target: str, ff_only: bool = True) -> str:
     if ff_only:
         args.append("--ff-only")
     args.append(source)
-    rc2, out2 = _git(root, *args)
+    _, out2 = _git(root, *args)
     return out + out2
 
 
@@ -150,21 +154,22 @@ def add_commit(root: Path, message: str) -> str:
     _ensure_repo(root)
     if not message.strip():
         return "[git] Commit-melding kan ikke være tom.\n"
-    rc_a, out_a = _git(root, "add", "-A")
+    _, out_a = _git(root, "add", "-A")
     rc_c, out_c = _git(root, "commit", "-m", message)
+    # Ikke hev feil her; returner output slik at UI ser “ingenting å commit’e” etc.
     return out_a + out_c
 
 
 def add_commit_push(root: Path, remote: str, branch: str, message: str) -> str:
     txt = add_commit(root, message)
-    rc_p, out_p = _git(root, "push", remote, branch)
-    rc_s, out_s = _git(root, "status", "-sb")
+    _, out_p = _git(root, "push", remote, branch)
+    _, out_s = _git(root, "status", "-sb")
     return txt + out_p + out_s
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Glob-beskyttelse + pre-push sjekk + stash&switch + resolve helper
-# ──────────────────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────
+# Beskyttede branches, pre-push sjekk, stash & switch, resolve-helper
+# ────────────────────────────────────────────────────────────────────────────
 
 def _is_protected(branch: str, patterns: list[str]) -> bool:
     b = branch or ""
@@ -172,7 +177,7 @@ def _is_protected(branch: str, patterns: list[str]) -> bool:
         pat = str(pat).strip()
         if not pat:
             continue
-        if any(ch in pat for ch in "*?["):
+        if any(x in pat for x in "*?["):
             if fnmatch.fnmatch(b, pat):
                 return True
         elif b == pat:
@@ -182,10 +187,11 @@ def _is_protected(branch: str, patterns: list[str]) -> bool:
 
 def pre_push_check(root: Path, run_tests: bool = False) -> tuple[int, str]:
     """
-    Kjør kodekvalitet før push. Bruker python -m for å sikre korrekt venv.
+    Kjør formaterings-/lint-/test-sjekker.
+    * Bruker 'python -m <tool>' der det gir mening; faller tilbake til CLI kun ved ekte import-feil.
+    * Returnerer (samlet_rc, kombinert_output).
     """
     _ensure_repo(root)
-
     steps: list[tuple[str, list[str], str]] = [
         ("black", ["--check", "."], "black --check ."),
         ("ruff", ["check", "."], "ruff check ."),
@@ -195,27 +201,28 @@ def pre_push_check(root: Path, run_tests: bool = False) -> tuple[int, str]:
 
     rc_total = 0
     out_all: list[str] = []
-    for module, mod_args, label in steps:
-        rc, out = _run_module(root, module, mod_args)
+    for tool, tool_args, label in steps:
+        rc, out = _run_module_or_cli(tool, tool_args, root)
         out_all.append(f"▶ {label}\n{out}")
+        # Behold første feilkode (nyttig i UI)
         if rc != 0 and rc_total == 0:
             rc_total = rc
-
     return rc_total, ("\n".join(out_all) + ("\n" if out_all else ""))
 
 
 def stash_switch(root: Path, branch: str, message: str | None = None) -> str:
     _ensure_repo(root)
+    if not branch:
+        return "[git] Ingen branch oppgitt.\n"
     msg = message or f"ui: auto-stash before switch to {branch}"
     _git(root, "stash", "push", "-u", "-m", msg)
-    _git(root, "switch", "HEAD")
-    rc, out = _git(root, "switch", branch)
+    _, out = _git(root, "switch", branch)
     return f"[git] stash push: {msg}\n" + out
 
 
 def resolve_helper(root: Path) -> str:
     _ensure_repo(root)
-    rc, out = _git(root, "diff", "--name-only", "--diff-filter=U")
+    _, out = _git(root, "diff", "--name-only", "--diff-filter=U")
     files = [ln.strip() for ln in (out or "").splitlines() if ln.strip()]
     guide: list[str] = []
     guide.append("=== Merge-konflikter ===")
@@ -239,9 +246,9 @@ def resolve_helper(root: Path) -> str:
     return "\n".join(guide) + "\n"
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Inngang for web-UI
-# ──────────────────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────
+# Hoved-kommando
+# ────────────────────────────────────────────────────────────────────────────
 
 def run_git(cfg: dict, action: str, args: dict) -> str:
     root = Path(cfg.get("project_root", ".")).resolve()
@@ -267,7 +274,7 @@ def run_git(cfg: dict, action: str, args: dict) -> str:
     if action == "pull":
         return pull_rebase(root, remote, branch or base, ff_only=True)
     if action == "push":
-        if _is_protected(branch, protected_patterns) and not bool(args.get("confirm, False")):
+        if _is_protected(branch, protected_patterns) and not bool(args.get("confirm", False)):
             return f"[git] '{branch}' er beskyttet. Sett confirm=true for å pushe.\n"
         if bool(args.get("precheck", False)):
             rc, txt = pre_push_check(root, bool(args.get("precheck_tests", False)))
@@ -298,8 +305,8 @@ def run_git(cfg: dict, action: str, args: dict) -> str:
             out += txt
             if rc != 0:
                 return out + "[git] Pre-push sjekk feilet. Avbryter push.\n"
-        rc_p, out_p = _git(root, "push", remote, branch)
-        rc_s, out_s = _git(root, "status", "-sb")
+        _, out_p = _git(root, "push", remote, branch)
+        _, out_s = _git(root, "status", "-sb")
         return out + out_p + out_s
     if action == "diff":
         return diff(root, staged=staged)
