@@ -526,18 +526,23 @@ def api_run(body: RunPayload):
             wrap = bool(args.get("wrap_read", False))
 
             if mode == "project":
-                # prosjekt-drevet
+                # Prosjekt-drevet: tving bruk av git-remote; ignorer ev. user/repo i config
                 if project_path:
                     gov["gh_raw"]["project_root"] = str(project_path)
                 remote = args.get("remote") or "origin"
                 gov["gh_raw"]["remote"] = remote
-                # branch kan være eksplisitt valgt i UI, ellers behold input/ev. config fallback
+
+                # NØKKEL: nullstill user/repo for å unngå at config overstyrer prosjektet
+                gov["gh_raw"]["user"] = None
+                gov["gh_raw"]["repo"] = None
+
+                # branch kan være valgt i UI; bruk hvis gitt
                 if args.get("branch"):
                     gov["gh_raw"]["branch"] = str(args["branch"])
-                # Konfig bygges – run_gh_raw vil selv slå opp owner/repo via git om de mangler
+
                 cfg = load_config("gh_raw_config.json", project_path, gov)
             else:
-                # manuell: user/repo/branch fra args overstyrer config
+                # Manuell modus: user/repo/branch fra args overstyrer config
                 if args.get("user"):
                     gov["gh_raw"]["user"] = str(args["user"])
                 if args.get("repo"):
@@ -545,12 +550,12 @@ def api_run(body: RunPayload):
                 if args.get("branch"):
                     gov["gh_raw"]["branch"] = str(args["branch"])
                 cfg = load_config("gh_raw_config.json", project_path, gov if gov["gh_raw"] else None)
-                # wrap_read også mulig via config om UI ikke sendte
                 wrap = bool(wrap or (cfg.get("gh_raw", {}) or {}).get("wrap_read", False))
 
             out = _capture(run_gh_raw, cfg=cfg, wrap_read=wrap)
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
+
         elif tool == "format":
             cfg = load_config(tool_cfg, project_path, ov or None)
             override = args.get("override") or None
