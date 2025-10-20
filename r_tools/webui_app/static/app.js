@@ -131,9 +131,7 @@ async function fetchGhRepoInfo() {
   const remote = document.getElementById('gh_remote')?.value || 'origin'
   let d
   try {
-    const r = await fetch(
-      `/api/gh-raw/repo-info?project=${encodeURIComponent(proj)}&remote=${encodeURIComponent(remote)}`
-    )
+    const r = await fetch(`/api/gh-raw/repo-info?project=${encodeURIComponent(proj)}&remote=${encodeURIComponent(remote)}`)
     if (!r.ok) {
       const txt = await r.text().catch(() => '')
       throw new Error(`HTTP ${r.status} ${r.statusText}${txt ? ` – ${txt.slice(0, 300)}` : ''}`)
@@ -170,8 +168,7 @@ async function fetchGhRepoInfo() {
       sel.appendChild(o)
     })
     const want =
-      (localStorage.getItem(PREF_KEY(currentProject())) &&
-        JSON.parse(localStorage.getItem(PREF_KEY(currentProject()))).gh_branch) ||
+      (localStorage.getItem(PREF_KEY(currentProject())) && JSON.parse(localStorage.getItem(PREF_KEY(currentProject()))).gh_branch) ||
       d.current_branch
     if (want && [...sel.options].some((o) => o.value === want)) sel.value = want
     else if (sel.options.length) sel.value = sel.options[0].value
@@ -185,7 +182,6 @@ async function fetchGhRepoInfo() {
     }
   }
 }
-
 
 /* Oppskrifter dropdown */
 async function fetchRecipes() {
@@ -830,8 +826,8 @@ function normalizeGlobsForFilenameSearch(list) {
     const hasSlash = pat.includes('/')
     const hasGlob = /[*?\[\]{},]/.test(pat)
     if (!hasSlash && !hasGlob) {
-      out.push(`./${pat}`)     // root
-      out.push(`**/${pat}`)    // hvor som helst
+      out.push(`./${pat}`) // root
+      out.push(`**/${pat}`) // hvor som helst
     } else {
       out.push(pat)
     }
@@ -839,7 +835,6 @@ function normalizeGlobsForFilenameSearch(list) {
   // fjern duplikater
   return Array.from(new Set(out))
 }
-
 
 /* Samle UI → format-config (felles struktur) */
 function gatherFormatUIToConfig() {
@@ -1008,7 +1003,7 @@ document.getElementById('refresh').onclick = async () => {
   await fetchCleanConfig()
   await loadSettings()
   await loadFormatUIFromConfig()
-    await fetchGitRemotes()
+  await fetchGitRemotes()
   await fetchGitBranches()
   syncGhRemotesFromGit()
   await fetchGhRepoInfo()
@@ -1129,10 +1124,16 @@ document.getElementById('run_paste').onclick = () =>
     const filenameSearch = !!document.getElementById('paste_filename_search').checked
     payload.args.filename_search = filenameSearch
 
-    const incRaw = document.getElementById('paste_include').value
-      .split(/\r?\n/).map(s => s.trim()).filter(Boolean)
-    const excRaw = document.getElementById('paste_exclude').value
-      .split(/\r?\n/).map(s => s.trim()).filter(Boolean)
+    const incRaw = document
+      .getElementById('paste_include')
+      .value.split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+    const excRaw = document
+      .getElementById('paste_exclude')
+      .value.split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean)
 
     // 🔧 3b-fix: utvid enkle filnavn når filename_search er aktivt
     const include = filenameSearch ? normalizeGlobsForFilenameSearch(incRaw) : incRaw
@@ -1315,7 +1316,6 @@ document.getElementById('run_gh').onclick = () =>
     return runTool('gh-raw', { args }, 'out_gh')
   })
 
-
 if (document.getElementById('run_backup')) {
   document.getElementById('run_backup').onclick = () =>
     withStatus('backup', 'out_backup', async () => {
@@ -1482,18 +1482,17 @@ setLamp('status_init', 'busy')
     }
     await loadSettings()
     // GH Raw UI events
-document.getElementById('gh_mode').addEventListener('change', () => {
-  showGhPanels()
-  savePrefs()
-})
-document.getElementById('gh_remote').addEventListener('change', async () => {
-  await fetchGhRepoInfo()
-  savePrefs()
-})
+    document.getElementById('gh_mode').addEventListener('change', () => {
+      showGhPanels()
+      savePrefs()
+    })
+    document.getElementById('gh_remote').addEventListener('change', async () => {
+      await fetchGhRepoInfo()
+      savePrefs()
+    })
     syncGhRemotesFromGit()
     await fetchGhRepoInfo()
     showGhPanels()
-
 
     await loadFormatUIFromConfig()
     loadPrefs()
