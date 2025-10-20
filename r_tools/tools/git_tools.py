@@ -6,14 +6,16 @@ import subprocess
 import sys
 from pathlib import Path
 
-# ────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────────
 # Prosesshjelpere
-# ────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────────
 
-def _run_cmd(cmd: list[str], cwd: Path) -> tuple[int, str]:
-    """Kjør valgfri kommando og returner (rc, stdout+stderr)."""
+def _run_git(cwd: Path, *args: str) -> tuple[int, str]:
+    """
+    Kjør 'git <args>' og returner (rc, stdout+stderr).
+    """
     proc = subprocess.run(
-        cmd,
+        ["git", *args],
         cwd=str(cwd),
         text=True,
         stdout=subprocess.PIPE,
@@ -21,60 +23,71 @@ def _run_cmd(cmd: list[str], cwd: Path) -> tuple[int, str]:
     )
     return proc.returncode, proc.stdout
 
-def _run_module_or_cli(name: str, args: list[str], cwd: Path) -> tuple[int, str]:
+def _run_module_or_cli(tool: str, tool_args: list[str], cwd: Path) -> tuple[int, str]:
     """
-    Forsøk å kjøre 'python -m <name> <args>' for å unngå PATH-issues (venv-vennlig).
-    Fall tilbake til ren CLI KUN når modulen ikke finnes (dvs. 'No module named ...').
+    Kjør først 'python -m <tool> ...' (sikker PATH),
+    fall tilbake til bare '<tool> ...' hvis det feiler å starte.
+    Returnerer (rc, output).
     """
-    rc, out = _run_cmd([sys.executable, "-m", name, *args], cwd)
-    if rc == 0:
-        return rc, out
-    # Dersom import feilet, prøv CLI (kan være installert som script)
-    if "No module named" in (out or ""):
-        return _run_cmd([name, *args], cwd)
-    # Ellers returner feilkoden fra verktøyet (f.eks. linter-funn)
-    return rc, out
+    # 1) python -m <tool>
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-m", tool, *tool_args],
+            cwd=str(cwd),
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        return proc.returncode, proc.stdout
+    except FileNotFoundError:
+        pass  # ekstremt usannsynlig (mangler python)
 
-def _git(cwd: Path, *args: str) -> tuple[int, str]:
-    """Kjør git og returner (rc, out)."""
-    return _run_cmd(["git", *args], cwd)
+    # 2) bare CLI-navn
+    proc = subprocess.run(
+        [tool, *tool_args],
+        cwd=str(cwd),
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    return proc.returncode, proc.stdout
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Git-hjelpere
+# ──────────────────────────────────────────────────────────────────────────────
 
 def _ensure_repo(root: Path) -> None:
-    rc, out = _git(root, "rev-parse", "--is-inside-work-tree")
+    rc, out = _run_git(root, "rev-parse", "--is-inside-work-tree")
     if rc != 0 or "true" not in (out or ""):
         raise RuntimeError(f"Ikke et git-repo: {root}")
 
-# ────────────────────────────────────────────────────────────────────────────
-# Enkle git-innpakkere
-# ────────────────────────────────────────────────────────────────────────────
-
 def current_branch(root: Path) -> str:
-    rc, out = _git(root, "rev-parse", "--abbrev-ref", "HEAD")
+    rc, out = _run_git(root, "rev-parse", "--abbrev-ref", "HEAD")
     if rc != 0:
         return ""
     return (out or "").strip()
 
 def _is_clean(root: Path) -> bool:
-    rc, out = _git(root, "status", "--porcelain")
+    rc, out = _run_git(root, "status", "--porcelain")
     return rc == 0 and (out.strip() == "")
 
 def list_branches(root: Path) -> list[str]:
     _ensure_repo(root)
-    rc, out = _git(root, "branch", "--format", "%(refname:short)")
+    rc, out = _run_git(root, "branch", "--format", "%(refname:short)")
     if rc != 0:
         return []
     return [ln.strip() for ln in out.splitlines() if ln.strip()]
 
 def list_remotes(root: Path) -> list[str]:
     _ensure_repo(root)
-    rc, out = _git(root, "remote")
+    rc, out = _run_git(root, "remote")
     if rc != 0:
         return []
     return [ln.strip() for ln in out.splitlines() if ln.strip()]
 
 def status(root: Path) -> str:
     _ensure_repo(root)
-    _, out = _git(root, "status", "-sb")
+    _, out = _run_git(root, "status", "-sb")
     return out
 
 def diff(root: Path, staged: bool = False) -> str:
@@ -82,73 +95,72 @@ def diff(root: Path, staged: bool = False) -> str:
     args = ["diff"]
     if staged:
         args.append("--cached")
-    _, out = _git(root, *args)
+    _, out = _run_git(root, *args)
     return out
 
 def log(root: Path, n: int = 10) -> str:
     _ensure_repo(root)
-    _, out = _git(root, "log", f"-{n}", "--oneline", "--graph", "--decorate")
+    _, out = _run_git(root, "log", f"-{n}", "--oneline", "--graph", "--decorate")
     return out
 
 def fetch(root: Path, remote: str) -> str:
     _ensure_repo(root)
-    _, out = _git(root, "fetch", remote)
+    _, out = _run_git(root, "fetch", remote)
     return out
 
 def pull_rebase(root: Path, remote: str, branch: str, ff_only: bool = True) -> str:
     _ensure_repo(root)
     args = ["pull", "--ff-only" if ff_only else "--rebase", remote, branch]
-    _, out = _git(root, *args)
+    _, out = _run_git(root, *args)
     return out
 
 def push(root: Path, remote: str, branch: str) -> str:
     _ensure_repo(root)
-    _, out = _git(root, "push", remote, branch)
+    _, out = _run_git(root, "push", remote, branch)
     return out
 
 def switch(root: Path, branch: str) -> str:
     _ensure_repo(root)
-    _, out = _git(root, "switch", branch)
+    _, out = _run_git(root, "switch", branch)
     return out
 
 def create_branch(root: Path, name: str, base: str | None = None) -> str:
     _ensure_repo(root)
     if base:
-        _, out = _git(root, "switch", "-c", name, base)
+        _, out = _run_git(root, "switch", "-c", name, base)
     else:
-        _, out = _git(root, "switch", "-c", name)
+        _, out = _run_git(root, "switch", "-c", name)
     return out
 
 def merge_to(root: Path, source: str, target: str, ff_only: bool = True) -> str:
     _ensure_repo(root)
-    rc, out = _git(root, "switch", target)
+    rc, out = _run_git(root, "switch", target)
     if rc != 0:
         return out
     args = ["merge"]
     if ff_only:
         args.append("--ff-only")
     args.append(source)
-    _, out2 = _git(root, *args)
+    _, out2 = _run_git(root, *args)
     return out + out2
 
 def add_commit(root: Path, message: str) -> str:
     _ensure_repo(root)
     if not message.strip():
         return "[git] Commit-melding kan ikke være tom.\n"
-    _, out_a = _git(root, "add", "-A")
-    rc_c, out_c = _git(root, "commit", "-m", message)
-    # Ikke hev feil her; returner output slik at UI ser “ingenting å commit’e” etc.
+    _, out_a = _run_git(root, "add", "-A")
+    _, out_c = _run_git(root, "commit", "-m", message)
     return out_a + out_c
 
 def add_commit_push(root: Path, remote: str, branch: str, message: str) -> str:
     txt = add_commit(root, message)
-    _, out_p = _git(root, "push", remote, branch)
-    _, out_s = _git(root, "status", "-sb")
+    _, out_p = _run_git(root, "push", remote, branch)
+    _, out_s = _run_git(root, "status", "-sb")
     return txt + out_p + out_s
 
-# ────────────────────────────────────────────────────────────────────────────
-# Beskyttede branches, pre-push sjekk, stash & switch, resolve-helper
-# ────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────────
+# Beskyttede branches / pre-push / stash&switch / resolve
+# ──────────────────────────────────────────────────────────────────────────────
 
 def _is_protected(branch: str, patterns: list[str]) -> bool:
     b = branch or ""
@@ -156,49 +168,93 @@ def _is_protected(branch: str, patterns: list[str]) -> bool:
         pat = str(pat).strip()
         if not pat:
             continue
-        if any(x in pat for x in "*?["):
+        if any(ch in pat for ch in "*?["):
             if fnmatch.fnmatch(b, pat):
                 return True
         elif b == pat:
             return True
     return False
 
-def pre_push_check(root: Path, run_tests: bool = False) -> tuple[int, str]:
+def pre_push_check(root: Path, run_tests: bool = False, mode: str = "strict") -> tuple[int, str]:
     """
-    Kjør formaterings-/lint-/test-sjekker.
-    * Bruker 'python -m <tool>' der det gir mening; faller tilbake til CLI kun ved ekte import-feil.
-    * Returnerer (samlet_rc, kombinert_output).
+    Kjør formaterings-/lint-/test-sjekker før push.
+
+    mode:
+      - "strict":      black --check må passere, ellers FAIL (default).
+      - "warn":        black-avvik gir bare advarsel; ruff/pytest kan fortsatt stoppe.
+      - "autoformat":  ved black-avvik kjør automatisk `black .` og fortsett; ruff/pytest kan stoppe.
     """
     _ensure_repo(root)
-    steps: list[tuple[str, list[str], str]] = [
-        ("black", ["--check", "."], "black --check ."),
-        ("ruff", ["check", "."], "ruff check ."),
-    ]
-    if run_tests:
-        steps.append(("pytest", ["-q"], "pytest -q"))
 
-    rc_total = 0
-    out_all: list[str] = []
-    for tool, tool_args, label in steps:
+    def _run_tool(label: str, tool: str, tool_args: list[str]) -> tuple[int, str]:
         rc, out = _run_module_or_cli(tool, tool_args, root)
-        out_all.append(f"▶ {label}\n{out}")
-        # Behold første feilkode (nyttig i UI)
-        if rc != 0 and rc_total == 0:
-            rc_total = rc
-    return rc_total, ("\n".join(out_all) + ("\n" if out_all else ""))
+        return rc, f"▶ {label}\n{out}"
+
+    overall_rc = 0
+    outputs: list[str] = []
+    reasons: list[str] = []
+
+    # 1) Black --check
+    black_rc, black_out = _run_tool("black --check .", "black", ["--check", "."])
+    outputs.append(black_out)
+
+    black_failed = black_rc != 0
+    if black_failed:
+        if mode == "autoformat":
+            fmt_rc, fmt_out = _run_module_or_cli("black", ["."], root)
+            outputs.append(f"▶ black . (autoformat)\n{fmt_out}")
+            if fmt_rc == 0:
+                black_failed = False
+                reasons.append("autoformatted by black")
+            else:
+                overall_rc = overall_rc or fmt_rc
+                reasons.append("black autoformat failed")
+        elif mode == "warn":
+            reasons.append("black found reformatting issues (warning only)")
+            black_failed = False
+        else:
+            overall_rc = overall_rc or black_rc
+            reasons.append("black --check failed")
+
+    # 2) Ruff
+    ruff_rc, ruff_out = _run_tool("ruff check .", "ruff", ["check", "."])
+    outputs.append(ruff_out)
+    if ruff_rc != 0:
+        overall_rc = overall_rc or ruff_rc
+        reasons.append("ruff failed")
+
+    # 3) Pytest (valgfritt)
+    if run_tests:
+        py_rc, py_out = _run_tool("pytest -q", "pytest", ["-q"])
+        outputs.append(py_out)
+        if py_rc != 0:
+            overall_rc = overall_rc or py_rc
+            reasons.append("pytest failed")
+
+    # Sammendrag
+    if overall_rc == 0:
+        summary = "Pre-push: OK"
+        if reasons:
+            summary += " (" + ", ".join(reasons) + ")"
+    else:
+        summary = "Pre-push: FAILED"
+        if reasons:
+            summary += " (" + ", ".join(reasons) + ")"
+
+    outputs.append(summary + "\n")
+    return overall_rc, "\n".join(outputs)
 
 def stash_switch(root: Path, branch: str, message: str | None = None) -> str:
     _ensure_repo(root)
-    if not branch:
-        return "[git] Ingen branch oppgitt.\n"
     msg = message or f"ui: auto-stash before switch to {branch}"
-    _git(root, "stash", "push", "-u", "-m", msg)
-    _, out = _git(root, "switch", branch)
+    _run_git(root, "stash", "push", "-u", "-m", msg)
+    _run_git(root, "switch", "HEAD")
+    _, out = _run_git(root, "switch", branch)
     return f"[git] stash push: {msg}\n" + out
 
 def resolve_helper(root: Path) -> str:
     _ensure_repo(root)
-    _, out = _git(root, "diff", "--name-only", "--diff-filter=U")
+    _, out = _run_git(root, "diff", "--name-only", "--diff-filter=U")
     files = [ln.strip() for ln in (out or "").splitlines() if ln.strip()]
     guide: list[str] = []
     guide.append("=== Merge-konflikter ===")
@@ -221,9 +277,9 @@ def resolve_helper(root: Path) -> str:
         guide.append("  - Aksepter 'ours':        git checkout --ours  <fil> && git add <fil>")
     return "\n".join(guide) + "\n"
 
-# ────────────────────────────────────────────────────────────────────────────
-# Hoved-kommando
-# ────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────────
+# Kommandosentral
+# ──────────────────────────────────────────────────────────────────────────────
 
 def run_git(cfg: dict, action: str, args: dict) -> str:
     root = Path(cfg.get("project_root", ".")).resolve()
@@ -252,7 +308,8 @@ def run_git(cfg: dict, action: str, args: dict) -> str:
         if _is_protected(branch, protected_patterns) and not bool(args.get("confirm", False)):
             return f"[git] '{branch}' er beskyttet. Sett confirm=true for å pushe.\n"
         if bool(args.get("precheck", False)):
-            rc, txt = pre_push_check(root, bool(args.get("precheck_tests", False)))
+            mode = str(args.get("precheck_mode") or "strict").lower()
+            rc, txt = pre_push_check(root, bool(args.get("precheck_tests", False)), mode=mode)
             if rc != 0:
                 return txt + "[git] Pre-push sjekk feilet. Avbryter push.\n"
         return push(root, remote, branch)
@@ -276,12 +333,13 @@ def run_git(cfg: dict, action: str, args: dict) -> str:
             return f"[git] '{branch}' er beskyttet. Sett confirm=true for ACP.\n"
         out = add_commit(root, message)
         if bool(args.get("precheck", False)):
-            rc, txt = pre_push_check(root, bool(args.get("precheck_tests", False)))
+            mode = str(args.get("precheck_mode") or "strict").lower()
+            rc, txt = pre_push_check(root, bool(args.get("precheck_tests", False)), mode=mode)
             out += txt
             if rc != 0:
                 return out + "[git] Pre-push sjekk feilet. Avbryter push.\n"
-        _, out_p = _git(root, "push", remote, branch)
-        _, out_s = _git(root, "status", "-sb")
+        _, out_p = _run_git(root, "push", remote, branch)
+        _, out_s = _run_git(root, "status", "-sb")
         return out + out_p + out_s
     if action == "diff":
         return diff(root, staged=staged)
