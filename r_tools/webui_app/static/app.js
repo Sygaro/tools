@@ -1313,7 +1313,18 @@ document.getElementById('run_gh').onclick = () =>
       }
     }
 
-    return runTool('gh-raw', { args }, 'out_gh')
+    const res = await runTool('gh-raw', { args }, 'out_gh')
+    // Ekstra hint ved 404/mulig privat repo
+    try {
+      const out = (res.output || res.error || '').toLowerCase()
+      if (out.includes('http 404') && out.includes('api.github.com')) {
+        const box = document.getElementById('out_gh')
+        if (box && !out.includes('GITHUB_TOKEN')) {
+          box.value += '\n\nHint: Dette kan være et privat repo. Sett GITHUB_TOKEN i miljøet på serveren.'
+        }
+      }
+    } catch {}
+    return res
   })
 
 if (document.getElementById('run_backup')) {
