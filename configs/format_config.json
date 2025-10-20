@@ -18,7 +18,7 @@
       "enable": true,
       "compact_blocks": true,
       "max_consecutive_blanks": 1,
-      "exts": [".py,.js,.ts,.css,.html,.json,.sh"],
+      "exts": [".py", ".js", ".ts", ".css", ".html", ".json", ".sh"],
       "exclude_exts": [".md"],
       "paths": []
     }

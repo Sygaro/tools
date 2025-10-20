@@ -314,8 +314,8 @@ def _run_cleanup(cfg: dict, dry_run: bool) -> None:
         return
     project_root = Path(cfg.get("project_root", ".")).resolve()
     paths = list(cln.get("paths", []))
-    exts = [e.lower() for e in (cln.get("exts") or _TEXT_EXTS_DEFAULT)]
-    exclude_exts = [e.lower() for e in (cln.get("exclude_exts") or [])]
+    exts = [e.lower() for e in (_as_list(cln.get("exts")) or _TEXT_EXTS_DEFAULT)]
+    exclude_exts = [e.lower() for e in _as_list(cln.get("exclude_exts") or [])]
     compact_blocks = bool(cln.get("compact_blocks", True))
     max_consecutive_blanks = int(cln.get("max_consecutive_blanks", 1))
     global_excl_dirs = list(cfg.get("exclude_dirs", []))
