@@ -468,7 +468,6 @@ def api_run(body: RunPayload):
             )
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
-
         elif tool == "paste":
             # bygg config med ev. overrides fra UI (inkl. nye felter)
             rov: dict[str, Any] = {"paste": {}}
@@ -520,7 +519,6 @@ def api_run(body: RunPayload):
                 )
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt, **metrics}}
-
         elif tool == "gh-raw":
             # Ny: to moduser
             #  - mode = "project": hent owner/repo fra git-remote for valgt project_root
@@ -562,7 +560,6 @@ def api_run(body: RunPayload):
             out = _capture(run_gh_raw, cfg=cfg, wrap_read=wrap)
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
-
         elif tool == "format":
             cfg = load_config(tool_cfg, project_path, ov or None)
             override = args.get("override") or None
@@ -590,7 +587,6 @@ def api_run(body: RunPayload):
             if "Traceback (most recent call last)" in out or "[error]" in out:
                 rc = 2
             return {"output": out, "summary": {"rc": rc, "duration_ms": dt, **metrics}}
-
         elif tool == "clean":
             cov: dict[str, Any] = {"clean": {}}
             if "targets" in args and isinstance(args["targets"], dict):
@@ -606,12 +602,10 @@ def api_run(body: RunPayload):
             out = _capture(run_clean, cfg=cfg, only=args.get("what") or None, skip=args.get("skip") or [], dry_run=dry_run)
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
-
         elif tool == "backup":
             rc, text = run_backup(args or {})
             dt = int((time.time() - t0) * 1000)
             return {"output": text, "rc": rc, "summary": {"rc": rc, "duration_ms": dt}}
-
         elif tool == "replace":
             rov: dict[str, Any] = {"replace": {}}
             for k_src, k_dst in [("include", "include"), ("exclude", "exclude"), ("max_size", "max_size")]:
@@ -635,21 +629,18 @@ def api_run(body: RunPayload):
             )
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
-
         elif tool == "git":
             from .git_tools import run_git
+
             cfg = load_config(tool_cfg, project_path, None)
             out = run_git(cfg, args.get("action", "status"), args)
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
-
         else:
             raise HTTPException(status_code=400, detail=f"Ukjent tool: {tool}")
-
     except Exception as e:
         dt = int((time.time() - t0) * 1000)
         return {"error": f"{type(e).__name__}: {e}", "summary": {"rc": 1, "duration_ms": dt}}
-
 
 @app.post("/api/format-preview")
 def api_format_preview(body: PreviewPayload):

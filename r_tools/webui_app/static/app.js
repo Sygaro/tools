@@ -458,7 +458,7 @@ function loadPrefs() {
     set('paste_out', p.paste_out)
     set('paste_include', p.paste_include)
     set('paste_exclude', p.paste_exclude)
-        set('paste_target_files', p.paste_target_files)
+    set('paste_target_files', p.paste_target_files)
     set('paste_soft_overflow', p.paste_soft_overflow)
     set('paste_force_single', p.paste_force_single, true)
     set('paste_blank_lines', p.paste_blank_lines)
@@ -1123,47 +1123,53 @@ document.getElementById('save_clean_targets').onclick = async () => {
   })
 }
 
-document.getElementById('run_paste').onclick = () =>document.getElementById('run_paste').onclick = () =>
-  withStatus('paste', 'out_paste', async () => {
-    const payload = { args: {} }
+document.getElementById('run_paste').onclick = () =>
+  (document.getElementById('run_paste').onclick = () =>
+    withStatus('paste', 'out_paste', async () => {
+      const payload = { args: {} }
 
-    // eksisterende
-    payload.args.list_only = document.getElementById('paste_list_only').checked
-    const out = document.getElementById('paste_out').value.trim()
-    if (out) payload.args.out_dir = out
-    const mx = parseInt(document.getElementById('paste_max').value || '4000', 10)
-    if (!Number.isNaN(mx)) payload.args.max_lines = mx
+      // eksisterende
+      payload.args.list_only = document.getElementById('paste_list_only').checked
+      const out = document.getElementById('paste_out').value.trim()
+      if (out) payload.args.out_dir = out
+      const mx = parseInt(document.getElementById('paste_max').value || '4000', 10)
+      if (!Number.isNaN(mx)) payload.args.max_lines = mx
 
-    const filenameSearch = !!document.getElementById('paste_filename_search').checked
-    payload.args.filename_search = filenameSearch
+      const filenameSearch = !!document.getElementById('paste_filename_search').checked
+      payload.args.filename_search = filenameSearch
 
-    const incRaw = document.getElementById('paste_include').value
-      .split(/\r?\n/).map(s => s.trim()).filter(Boolean)
-    const excRaw = document.getElementById('paste_exclude').value
-      .split(/\r?\n/).map(s => s.trim()).filter(Boolean)
+      const incRaw = document
+        .getElementById('paste_include')
+        .value.split(/\r?\n/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+      const excRaw = document
+        .getElementById('paste_exclude')
+        .value.split(/\r?\n/)
+        .map((s) => s.trim())
+        .filter(Boolean)
 
-    // utvid enkle filnavn når filename_search er aktivt
-    const include = filenameSearch ? normalizeGlobsForFilenameSearch(incRaw) : incRaw
-    const exclude = filenameSearch ? normalizeGlobsForFilenameSearch(excRaw) : excRaw
-    if (include.length) payload.args.include = include
-    if (exclude.length) payload.args.exclude = exclude
+      // utvid enkle filnavn når filename_search er aktivt
+      const include = filenameSearch ? normalizeGlobsForFilenameSearch(incRaw) : incRaw
+      const exclude = filenameSearch ? normalizeGlobsForFilenameSearch(excRaw) : excRaw
+      if (include.length) payload.args.include = include
+      if (exclude.length) payload.args.exclude = exclude
 
-    // NYE FELTER
-    const tf = parseInt(document.getElementById('paste_target_files').value || '0', 10)
-    if (!Number.isNaN(tf) && tf > 0) payload.args.target_files = tf
+      // NYE FELTER
+      const tf = parseInt(document.getElementById('paste_target_files').value || '0', 10)
+      if (!Number.isNaN(tf) && tf > 0) payload.args.target_files = tf
 
-    const so = parseInt(document.getElementById('paste_soft_overflow').value || '0', 10)
-    if (!Number.isNaN(so) && so >= 0) payload.args.soft_overflow = so
+      const so = parseInt(document.getElementById('paste_soft_overflow').value || '0', 10)
+      if (!Number.isNaN(so) && so >= 0) payload.args.soft_overflow = so
 
-    const fs = !!document.getElementById('paste_force_single').checked
-    if (fs) payload.args.force_single_file = true
+      const fs = !!document.getElementById('paste_force_single').checked
+      if (fs) payload.args.force_single_file = true
 
-    const bl = (document.getElementById('paste_blank_lines').value || '').trim()
-    if (bl) payload.args.blank_lines = bl   // "keep" | "collapse" | "drop"
+      const bl = (document.getElementById('paste_blank_lines').value || '').trim()
+      if (bl) payload.args.blank_lines = bl // "keep" | "collapse" | "drop"
 
-    return runTool('paste', payload, 'out_paste')
-  })
-
+      return runTool('paste', payload, 'out_paste')
+    }))
 
 document.getElementById('run_format').onclick = () =>
   withStatus('format', 'out_format', async () => {
