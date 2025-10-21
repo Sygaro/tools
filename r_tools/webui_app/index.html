@@ -730,22 +730,61 @@
         </aside>
 
         <!-- Help: Paste -->
-        <aside class="card help-panel" data-help-for="paste">
-          <div class="tool-header">
-            <div class="tool-title">Hjelp: Paste</div>
-            <div class="tool-actions"><button class="btn help-toggle" data-help-for="paste">Skjul</button></div>
-          </div>
-          <div class="tool-body">
-            <ul class="help-list">
-              <li><b>Out dir</b> – mappe (relativ til prosjekt) der utvalgte filer kopieres/skrives.</li>
-              <li><b>Kun liste</b> – skriv bare liste over kandidater, ikke filer.</li>
-              <li><b>Filnavn-søk</b> – velg filer ved glob/regex på filnavn.</li>
-              <li><b>Max linjer</b> – kutt hver fil i output ved n linjer (for visning/deler).</li>
-              <li><b>Include/Exclude</b> – hvilke filer som telles med/utelates.</li>
-            </ul>
-            <p class="muted">Brukes f.eks. til å lage “paste_out/” med utdrag til deling.</p>
-          </div>
-        </aside>
+<aside class="card help-panel" data-help-for="paste">
+  <div class="tool-header">
+    <div class="tool-title">Hjelp: Paste</div>
+    <div class="tool-actions"><button class="btn help-toggle" data-help-for="paste">Skjul</button></div>
+  </div>
+  <div class="tool-body">
+    <ul class="help-list">
+      <li><b>Out dir</b> – mappe (relativ til prosjekt) hvor <code>paste_XX.txt</code> og <code>index.txt</code> skrives.</li>
+      <li><b>Kun liste</b> – skriv bare liste over kandidater (ingen filer genereres).</li>
+      <li>
+        <b>Filnavn-søk</b> – velg filer via filnavn/glob.
+        <br />
+        Enkle filnavn uten skråstrek/wildcards (f.eks. <code>.env</code>, <code>README.md</code>) utvides automatisk til <code>./navn</code> og <code>**/navn</code> for å treffe både rot og underkataloger.
+      </li>
+      <li>
+        <b>Maks linjer per paste-fil</b> – øvre grense pr. <code>paste_XX.txt</code>.
+        <br />
+        Telling inkluderer header/footer (BEGIN/END), så en fil kan “spise” litt mer enn selve koden.
+      </li>
+      <li>
+        <b>Mål antall filer</b> – forsøk å pakke utvalget i n paste-filer (first-fit decreasing).
+        <br />
+        Praktisk når totalen bare så vidt overstiger maks; innhold fordeles mest mulig jevnt uten å splitte enkeltfiler.
+      </li>
+      <li>
+        <b>Tillat myk overskridelse</b> – lov å la siste fil gå over maks hvis det sparer én ekstra <code>paste_XX.txt</code>.
+        <br />
+        Gjelder bare når “mål antall filer” er satt, og aldri splitter enkeltfiler.
+      </li>
+      <li>
+        <b>Tving én fil</b> – legg alt i én stor <code>paste_01.txt</code> (ignorer maks linjer).
+        <br />
+        Nyttig for raske delinger der én fil er ønsket.
+      </li>
+      <li>
+        <b>Fjern tomme linjer</b> – komprimer innhold ved å fjerne blanke linjer i kodetekst før pakking.
+        <br />
+        Reduserer antall linjer uten å endre kode (ingen whitespace i linjeslutt beholdes).
+      </li>
+      <li>
+        <b>Include / Exclude</b> – lister med globs/filnavn for å ta med eller utelate filer.
+        <br />
+        Støtter også globale ekskluderinger fra konfig (f.eks. kataloger/enkeltfiler).
+      </li>
+    </ul>
+
+    <p class="muted">
+      • En kildefil blir aldri splittet mellom to paste-filer. <br />
+      • Det genereres alltid en <code>index.txt</code> som peker ut hvilke filer som havnet i hvilken <code>paste_XX.txt</code> og antall linjer. <br />
+      • Bruk “Kun liste” for å verifisere utvalget før du skriver. <br />
+      • Hvis både “Tving én fil” og “Mål antall filer” settes, vinner “Tving én fil”.
+    </p>
+  </div>
+</aside>
+
 
         <!-- Help: Format -->
         <aside class="card help-panel" data-help-for="format">
