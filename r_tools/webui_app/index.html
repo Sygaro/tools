@@ -131,7 +131,45 @@
               <label><input type="checkbox" id="paste_list_only" /> Kun liste</label>
               <label><input type="checkbox" id="paste_filename_search" checked /> Filnavn-søk globalt</label>
               <label>Max linjer<input id="paste_max" type="number" value="4000" /></label>
+              
             </div>
+            <div class="row">
+  <label for="paste_target_files">Mål antall filer</label>
+  <input id="paste_target_files" type="short_number" min="0" placeholder="0 = auto" />
+  <div class="muted small">
+    Fordel blokker jevnt over N filer. Setter effektiv kapasitet til <code>ceil(total/N)</code>. 0 = deaktivert.
+  </div>
+</div>
+
+<div class="row">
+  <label for="paste_soft_overflow">Soft overflow</label>
+  <input id="paste_soft_overflow" type="short_number" min="0" value="0" />
+  <div class="muted small">
+    Tillat inntil X ekstra linjer per fil (utover maks kapasitet) for å redusere antall paste-filer. Filer splittes aldri.
+  </div>
+</div>
+
+<div class="row">
+  <label for="paste_force_single">Tving én fil</label>
+  <label class="checkbox">
+    <input id="paste_force_single" type="checkbox" />
+    Skriv alt til én paste_01.txt uansett.
+  </label>
+</div>
+
+<div class="row">
+  <label for="paste_blank_lines">Tomlinjer i kode</label>
+  <select id="paste_blank_lines">
+    <option value="">(standard = keep)</option>
+    <option value="keep">Keep (uendret)</option>
+    <option value="collapse">Collapse (maks én tomlinje)</option>
+    <option value="drop">Drop (fjern alle tomlinjer)</option>
+  </select>
+  <div class="muted small">
+    Påvirker kun paste-output (kildene endres ikke). Linjetallet i header (LINES) reflekterer resultatet etter valgt policy.
+  </div>
+</div>
+
             <label>Out dir (relativ til prosjekt)</label>
             <input id="paste_out" type="text" placeholder="paste_out" />
             <label>Include (linje per mønster)</label>

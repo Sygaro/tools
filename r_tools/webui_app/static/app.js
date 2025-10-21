@@ -376,6 +376,11 @@ function savePrefs() {
     paste_out: document.getElementById('paste_out').value,
     paste_include: document.getElementById('paste_include').value,
     paste_exclude: document.getElementById('paste_exclude').value,
+    paste_target_files: document.getElementById('paste_target_files')?.value,
+    paste_soft_overflow: document.getElementById('paste_soft_overflow')?.value,
+    paste_force_single: document.getElementById('paste_force_single')?.checked,
+    paste_blank_lines: document.getElementById('paste_blank_lines')?.value,
+
     format_dry: document.getElementById('format_dry').checked,
     fmt_prettier_enable: document.getElementById('fmt_prettier_enable')?.checked,
     fmt_prettier_globs: document.getElementById('fmt_prettier_globs')?.value,
@@ -453,6 +458,11 @@ function loadPrefs() {
     set('paste_out', p.paste_out)
     set('paste_include', p.paste_include)
     set('paste_exclude', p.paste_exclude)
+        set('paste_target_files', p.paste_target_files)
+    set('paste_soft_overflow', p.paste_soft_overflow)
+    set('paste_force_single', p.paste_force_single, true)
+    set('paste_blank_lines', p.paste_blank_lines)
+
     set('format_dry', p.format_dry, true)
     set('fmt_prettier_enable', p.fmt_prettier_enable, true)
     set('fmt_prettier_globs', p.fmt_prettier_globs)
@@ -957,6 +967,7 @@ const PREF_FIELDS = `
 project search_terms search_all search_case search_max search_files_only search_path_mode
 search_limit_dirs search_limit_exts search_include search_exclude search_filename_search
 rep_filename_search paste_list_only paste_filename_search paste_max paste_out paste_include paste_exclude
+paste_target_files paste_soft_overflow paste_force_single paste_blank_lines
 format_dry clean_what clean_skip gh_prefix gh_wrap_read gh_mode gh_remote gh_user gh_repo gh_branch
 rep_find rep_repl rep_regex rep_case rep_backup rep_dry rep_showdiff rep_max rep_include rep_exclude
 fmt_prettier_enable fmt_prettier_globs fmt_prettier_printWidth fmt_prettier_tabWidth fmt_prettier_singleQuote fmt_prettier_semi fmt_prettier_trailingComma
@@ -1112,9 +1123,11 @@ document.getElementById('save_clean_targets').onclick = async () => {
   })
 }
 
-document.getElementById('run_paste').onclick = () =>
+document.getElementById('run_paste').onclick = () =>document.getElementById('run_paste').onclick = () =>
   withStatus('paste', 'out_paste', async () => {
     const payload = { args: {} }
+
+    // eksisterende
     payload.args.list_only = document.getElementById('paste_list_only').checked
     const out = document.getElementById('paste_out').value.trim()
     if (out) payload.args.out_dir = out
@@ -1124,26 +1137,33 @@ document.getElementById('run_paste').onclick = () =>
     const filenameSearch = !!document.getElementById('paste_filename_search').checked
     payload.args.filename_search = filenameSearch
 
-    const incRaw = document
-      .getElementById('paste_include')
-      .value.split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-    const excRaw = document
-      .getElementById('paste_exclude')
-      .value.split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter(Boolean)
+    const incRaw = document.getElementById('paste_include').value
+      .split(/\r?\n/).map(s => s.trim()).filter(Boolean)
+    const excRaw = document.getElementById('paste_exclude').value
+      .split(/\r?\n/).map(s => s.trim()).filter(Boolean)
 
-    // 🔧 3b-fix: utvid enkle filnavn når filename_search er aktivt
+    // utvid enkle filnavn når filename_search er aktivt
     const include = filenameSearch ? normalizeGlobsForFilenameSearch(incRaw) : incRaw
     const exclude = filenameSearch ? normalizeGlobsForFilenameSearch(excRaw) : excRaw
-
     if (include.length) payload.args.include = include
     if (exclude.length) payload.args.exclude = exclude
 
+    // NYE FELTER
+    const tf = parseInt(document.getElementById('paste_target_files').value || '0', 10)
+    if (!Number.isNaN(tf) && tf > 0) payload.args.target_files = tf
+
+    const so = parseInt(document.getElementById('paste_soft_overflow').value || '0', 10)
+    if (!Number.isNaN(so) && so >= 0) payload.args.soft_overflow = so
+
+    const fs = !!document.getElementById('paste_force_single').checked
+    if (fs) payload.args.force_single_file = true
+
+    const bl = (document.getElementById('paste_blank_lines').value || '').trim()
+    if (bl) payload.args.blank_lines = bl   // "keep" | "collapse" | "drop"
+
     return runTool('paste', payload, 'out_paste')
   })
+
 
 document.getElementById('run_format').onclick = () =>
   withStatus('format', 'out_format', async () => {

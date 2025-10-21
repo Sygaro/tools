@@ -79,6 +79,15 @@ select {
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
+input[type='short_number'],
+select {
+  width: 100px;
+  padding: 10px;
+  background: #0e1220;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
 textarea {
   min-height: 160px;
   font-family: ui-monospace, Menlo, Consolas, monospace;

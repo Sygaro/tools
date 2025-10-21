@@ -468,14 +468,27 @@ def api_run(body: RunPayload):
             )
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
+
         elif tool == "paste":
-            # bygg config med ev. overrides fra UI
+            # bygg config med ev. overrides fra UI (inkl. nye felter)
             rov: dict[str, Any] = {"paste": {}}
-            for key in ["out_dir", "max_lines", "include", "exclude", "filename_search"]:
+            for key in [
+                "out_dir",
+                "max_lines",
+                "include",
+                "exclude",
+                "filename_search",
+                # nye:
+                "target_files",
+                "soft_overflow",
+                "force_single_file",
+                "blank_lines",
+            ]:
                 if key in args and args[key] not in (None, ""):
                     if key in ("include", "exclude") and args[key] == []:
                         continue
                     rov["paste"][key] = args[key]
+
             cfg = load_config(tool_cfg, project_path, rov if rov["paste"] else None)
 
             list_only = bool(args.get("list_only", False))
@@ -493,16 +506,9 @@ def api_run(body: RunPayload):
             metrics: dict[str, int] = {}
             if not list_only:
                 metrics = _compute_paste_metrics(out_path)
-            else:
-                # grovt anslag fra stdout
-                files = len(re.findall(r"^===== BEGIN FILE =====", out, flags=re.M))
-                chunks = len(re.findall(r"^CHUNK:\s+\d+/\d+", out, flags=re.M))
-                metrics = {"paste_files": files, "paste_file_sections": files, "paste_code_lines": 0, "paste_chunks": chunks}
-
             # cache metrikker for UI
             global LAST_PASTE_SUMMARY
             LAST_PASTE_SUMMARY = dict(metrics or {})
-
             # legg ved enkel tekstlig oppsummering nederst i stdout
             if metrics:
                 out = (
@@ -512,9 +518,9 @@ def api_run(body: RunPayload):
                     + f"Seksjoner   : {metrics.get('paste_file_sections', 0)}\n"
                     + f"Kodelinjer  : {metrics.get('paste_code_lines', 0)}\n"
                 )
-
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt, **metrics}}
+
         elif tool == "gh-raw":
             # Ny: to moduser
             #  - mode = "project": hent owner/repo fra git-remote for valgt project_root
@@ -531,23 +537,18 @@ def api_run(body: RunPayload):
             wrap = bool(args.get("wrap_read", False))
 
             if mode == "project":
-                # Prosjekt-drevet: tving bruk av git-remote; ignorer ev. user/repo i config
+                # prosjekt-drevet
                 if project_path:
                     gov["gh_raw"]["project_root"] = str(project_path)
                 remote = args.get("remote") or "origin"
                 gov["gh_raw"]["remote"] = remote
-
-                # NØKKEL: nullstill user/repo for å unngå at config overstyrer prosjektet
-                gov["gh_raw"]["user"] = None
-                gov["gh_raw"]["repo"] = None
-
-                # branch kan være valgt i UI; bruk hvis gitt
+                # branch kan være eksplisitt valgt i UI, ellers behold input/ev. config fallback
                 if args.get("branch"):
                     gov["gh_raw"]["branch"] = str(args["branch"])
-
+                # Konfig bygges – run_gh_raw vil selv slå opp owner/repo via git om de mangler
                 cfg = load_config("gh_raw_config.json", project_path, gov)
             else:
-                # Manuell modus: user/repo/branch fra args overstyrer config
+                # manuell: user/repo/branch fra args overstyrer config
                 if args.get("user"):
                     gov["gh_raw"]["user"] = str(args["user"])
                 if args.get("repo"):
@@ -555,11 +556,13 @@ def api_run(body: RunPayload):
                 if args.get("branch"):
                     gov["gh_raw"]["branch"] = str(args["branch"])
                 cfg = load_config("gh_raw_config.json", project_path, gov if gov["gh_raw"] else None)
+                # wrap_read også mulig via config om UI ikke sendte
                 wrap = bool(wrap or (cfg.get("gh_raw", {}) or {}).get("wrap_read", False))
 
             out = _capture(run_gh_raw, cfg=cfg, wrap_read=wrap)
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
+
         elif tool == "format":
             cfg = load_config(tool_cfg, project_path, ov or None)
             override = args.get("override") or None
@@ -587,6 +590,7 @@ def api_run(body: RunPayload):
             if "Traceback (most recent call last)" in out or "[error]" in out:
                 rc = 2
             return {"output": out, "summary": {"rc": rc, "duration_ms": dt, **metrics}}
+
         elif tool == "clean":
             cov: dict[str, Any] = {"clean": {}}
             if "targets" in args and isinstance(args["targets"], dict):
@@ -602,10 +606,12 @@ def api_run(body: RunPayload):
             out = _capture(run_clean, cfg=cfg, only=args.get("what") or None, skip=args.get("skip") or [], dry_run=dry_run)
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
+
         elif tool == "backup":
             rc, text = run_backup(args or {})
             dt = int((time.time() - t0) * 1000)
             return {"output": text, "rc": rc, "summary": {"rc": rc, "duration_ms": dt}}
+
         elif tool == "replace":
             rov: dict[str, Any] = {"replace": {}}
             for k_src, k_dst in [("include", "include"), ("exclude", "exclude"), ("max_size", "max_size")]:
@@ -629,18 +635,21 @@ def api_run(body: RunPayload):
             )
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
+
         elif tool == "git":
             from .git_tools import run_git
-
             cfg = load_config(tool_cfg, project_path, None)
             out = run_git(cfg, args.get("action", "status"), args)
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
+
         else:
             raise HTTPException(status_code=400, detail=f"Ukjent tool: {tool}")
+
     except Exception as e:
         dt = int((time.time() - t0) * 1000)
         return {"error": f"{type(e).__name__}: {e}", "summary": {"rc": 1, "duration_ms": dt}}
+
 
 @app.post("/api/format-preview")
 def api_format_preview(body: PreviewPayload):
