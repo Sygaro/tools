@@ -469,24 +469,48 @@ def api_run(body: RunPayload):
             dt = int((time.time() - t0) * 1000)
             return {"output": out, "summary": {"rc": 0, "duration_ms": dt}}
         elif tool == "paste":
-            # bygg config med ev. overrides fra UI (inkl. nye felter)
+            # bygg config med ev. overrides fra UI
             rov: dict[str, Any] = {"paste": {}}
-            for key in [
-                "out_dir",
-                "max_lines",
-                "include",
-                "exclude",
-                "filename_search",
-                # nye:
-                "target_files",
-                "soft_overflow",
-                "force_single_file",
-                "blank_lines",
-            ]:
-                if key in args and args[key] not in (None, ""):
-                    if key in ("include", "exclude") and args[key] == []:
+
+            # Korrekte nøkler som verktøyet forventer
+            mapping = {
+                "out_dir": "out_dir",
+                "max_lines": "max_lines",
+                "include": "include",
+                "exclude": "exclude",
+                "filename_search": "filename_search",
+                # NYTT / RIKTIG:
+                "target_files": "target_files",
+                "soft_overflow": "soft_overflow",
+                "force_single_file": "force_single_file",
+                "blank_lines": "blank_lines",
+                "only_globs": "only_globs",
+                "skip_globs": "skip_globs",
+            }
+
+            # plukk opp og normaliser innkommende argumenter
+            for src, dst in mapping.items():
+                if src not in args:
+                    continue
+                val = args[src]
+                if val in (None, ""):
+                    continue
+                if dst in ("include", "exclude", "only_globs", "skip_globs") and val == []:
+                    # ikke overskriv config med tom-lister
+                    continue
+
+                # type-normalisering
+                if dst in ("max_lines", "target_files", "soft_overflow"):
+                    try:
+                        val = int(val)
+                    except Exception:
                         continue
-                    rov["paste"][key] = args[key]
+                elif dst in ("filename_search", "force_single_file"):
+                    val = bool(val)
+                elif dst == "blank_lines":
+                    val = str(val).strip().lower()  # "keep" | "collapse" | "drop"
+
+                rov["paste"][dst] = val
 
             cfg = load_config(tool_cfg, project_path, rov if rov["paste"] else None)
 

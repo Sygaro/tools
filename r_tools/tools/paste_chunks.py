@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -354,12 +355,15 @@ def run_paste(cfg: dict, list_only: bool = False) -> None:
     if force_single:
         buckets = [items] if items else []
     else:
-        if target_files and target_files > 0:
-            # fordel jevnt: kapasitet = ceil(total / N)
-            # (soft_overflow brukes fortsatt som “buffer” per bøtte)
-            import math
+        import math
 
-            capacity = max(1, math.ceil(total_item_lines / target_files))
+        if target_files and target_files > 0:
+            ideal = max(1, math.ceil(total_item_lines / target_files))
+            # Hold "linjer pr. fil" (max_lines) som en hard grense,
+            # med mindre du eksplisitt har tillatt myk overskridelse.
+            # Dette gjør at "antall linjer pr. fil" fungerer uavhengig
+            # av "antall filer"-ønsket, samtidig som vi fordeler jevnt.
+            capacity = min(ideal, int(pcfg.max_lines))
         else:
             capacity = int(pcfg.max_lines)
 
