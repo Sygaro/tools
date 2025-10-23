@@ -1149,6 +1149,13 @@ document.getElementById('run_paste').onclick = () =>
     if (include.length) payload.args.include = include
     if (exclude.length) payload.args.exclude = exclude
     // NYE FELTER
+    // etter soft_overflow / target_files / force_single / blank_lines etc.
+const allowSplit = !!document.getElementById('paste_allow_split')?.checked;
+if (allowSplit) payload.args.allow_split = true;
+
+const splitChunkLines = parseInt(document.getElementById('paste_split_chunk_lines')?.value || '0', 10);
+if (!Number.isNaN(splitChunkLines) && splitChunkLines > 0) payload.args.split_chunk_lines = splitChunkLines;
+
     const tf = parseInt(document.getElementById('paste_target_files').value || '0', 10)
     if (!Number.isNaN(tf) && tf > 0) payload.args.target_files = tf
     const so = parseInt(document.getElementById('paste_soft_overflow').value || '0', 10)

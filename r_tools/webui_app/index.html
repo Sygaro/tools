@@ -146,7 +146,22 @@
               <div class="muted small">
                 Tillat inntil X ekstra linjer per fil (utover maks kapasitet) for å redusere antall paste-filer. Filer splittes aldri.
               </div>
+              
             </div>
+<div class="row">
+  <label for="paste_allow_split">Tillat splitting</label>
+  <label class="checkbox">
+    <input id="paste_allow_split" type="checkbox" />
+    Splitt filer som er større enn <code>split_chunk_lines</code> i flere chunker.
+  </label>
+</div>
+
+<div class="row">
+  <label for="paste_split_chunk_lines">Chunk-lengde (linjer)</label>
+  <input id="paste_split_chunk_lines" type="number" min="1" value="4000" />
+  <div class="muted small">Maks linjer per chunk når splitting er aktiv (standard = max_lines).</div>
+</div>
+
 
             <div class="row">
               <label for="paste_force_single">Tving én fil</label>

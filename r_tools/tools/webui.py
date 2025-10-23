@@ -472,16 +472,16 @@ def api_run(body: RunPayload):
             # bygg config med ev. overrides fra UI
             rov: dict[str, Any] = {"paste": {}}
 
-            # Korrekte nøkler som verktøyet forventer
             mapping = {
                 "out_dir": "out_dir",
                 "max_lines": "max_lines",
                 "include": "include",
                 "exclude": "exclude",
                 "filename_search": "filename_search",
-                # NYTT / RIKTIG:
-                "target_files": "target_files",
                 "soft_overflow": "soft_overflow",
+                "allow_split": "allow_split",
+                "split_chunk_lines": "split_chunk_lines",
+                "target_files": "target_files",
                 "force_single_file": "force_single_file",
                 "blank_lines": "blank_lines",
                 "only_globs": "only_globs",
@@ -500,17 +500,22 @@ def api_run(body: RunPayload):
                     continue
 
                 # type-normalisering
-                if dst in ("max_lines", "target_files", "soft_overflow"):
+                # heltalls-felter
+                if dst in ("max_lines", "target_files", "soft_overflow", "split_chunk_lines"):
                     try:
                         val = int(val)
                     except Exception:
+                        # hvis ikke konvertibel, hopp over (beholder config-verdi)
                         continue
-                elif dst in ("filename_search", "force_single_file"):
+                # boolske felter
+                elif dst in ("filename_search", "force_single_file", "allow_split"):
                     val = bool(val)
+                # spesial: blank_lines -> streng og normalisert
                 elif dst == "blank_lines":
                     val = str(val).strip().lower()  # "keep" | "collapse" | "drop"
 
                 rov["paste"][dst] = val
+
 
             cfg = load_config(tool_cfg, project_path, rov if rov["paste"] else None)
 

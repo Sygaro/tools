@@ -246,6 +246,8 @@ def run_paste(cfg: dict, list_only: bool = False) -> None:
             soft_overflow: int        -> tillat inntil X ekstra linjer per fil ut over capacity
             force_single_file: bool   -> skriv alt i én fil (ignorer kapasitetsregler)
             blank_lines: "keep"|"collapse"|"drop"  -> håndtering av tomlinjer i KODE
+            allow_split: bool         -> tillat splitting av store filer
+            split_chunk_lines: int   -> maks linjer per chunk når split brukes
     """
     root = Path(cfg.get("project_root", ".")).resolve()
     pc = cfg.get("paste", {}) or {}
@@ -257,6 +259,8 @@ def run_paste(cfg: dict, list_only: bool = False) -> None:
     soft_overflow = int(pc.get("soft_overflow", 0) or 0)
     force_single = bool(pc.get("force_single_file", False))
     blank_policy = str(pc.get("blank_lines", "keep")).strip().lower()  # "keep" | "collapse" | "drop"
+    allow_split = bool(pc.get("allow_split", False))
+    split_chunk_lines = int(pc.get("split_chunk_lines", 0) or 0)
 
     pcfg = PasteCfg(
         project_root=root,
@@ -301,7 +305,7 @@ def run_paste(cfg: dict, list_only: bool = False) -> None:
             # kan ikke relativisere – hopp over
             continue
 
-        text, code_line_count = _read_text(file_path)
+        text, orig_code_lines = _read_text(file_path)
 
         # --- komprimer tomlinjer i KODE etter ønske ---
         if blank_policy in ("drop", "collapse"):
@@ -321,34 +325,60 @@ def run_paste(cfg: dict, list_only: bool = False) -> None:
                         out_lines.append(ln)
                 lines = out_lines
             text = "\n".join(lines)
-            # sørg for avsluttende newline for kodeblokk
+        # sørg for avsluttende newline for kodeblokk
         if not text.endswith("\n"):
             text += "\n"
 
-        # linjetallet i HEADERE skal fortsatt reflektere KODE-linjer i originalen eller i den komprimerte?:
-        # vi velger å rapportere ETTER komprimering (mest nyttig ift. plass) – endre enkelt hvis du vil ha originaltallet.
-        code_line_count = text.count("\n") - (1 if text.endswith("\n") else 0)
+        # rapporter linjer ETTER eventuell komprimering (practical for packing)
+        code_line_count = text.count("\n")  # counts trailing newline as line -> that's intended
 
+        footer = ["----- END CODE -----", "===== END FILE ====="]
+
+        # Hvis splitting er aktivert OG kodelinjer overstiger split_chunk_lines => split
+        if allow_split and split_chunk_lines > 0 and code_line_count > split_chunk_lines:
+            # del kode-delen i chunker med maks split_chunk_lines per chunk
+            lines_with_end = text.splitlines(keepends=True)
+            chunks = [ "".join(lines_with_end[i:i+split_chunk_lines]) for i in range(0, len(lines_with_end), split_chunk_lines) ]
+            total_chunks = len(chunks)
+            for ci, chunk_text in enumerate(chunks, start=1):
+                # sørg for newline på chunk (split-preserving)
+                if not chunk_text.endswith("\n"):
+                    chunk_text += "\n"
+                chunk_lines = chunk_text.count("\n")
+                sha_chunk = _sha256_bytes(chunk_text.encode("utf-8", errors="replace"))
+                header = [
+                    "===== BEGIN FILE =====",
+                    f"PATH: {rel}",
+                    f"TOTAL_LINES: {code_line_count}",
+                    f"LINES: {chunk_lines}",
+                    f"CHUNK: {ci}/{total_chunks}",
+                    f"SHA256: {sha_chunk}",
+                    "----- BEGIN CODE -----",
+                ]
+                rendered = "\n".join(header) + "\n" + chunk_text + "\n".join(footer) + "\n"
+                block_lines = rendered.count("\n")
+                total_item_lines += block_lines
+                items.append(PasteItem(rel_path=rel, rendered=rendered, lines=block_lines))
+            # ferdig med denne filen
+            continue
+
+        # Ikke split: lag vanlig item (ingen splitting)
         sha = _sha256_bytes(text.encode("utf-8", errors="replace"))
-
         header = [
             "===== BEGIN FILE =====",
             f"PATH: {rel}",
+            f"TOTAL_LINES: {code_line_count}",
             f"LINES: {code_line_count}",
             "CHUNK: 1/1",
             f"SHA256: {sha}",
             "----- BEGIN CODE -----",
         ]
-        footer = ["----- END CODE -----", "===== END FILE ====="]
-
         rendered = "\n".join(header) + "\n" + text + "\n".join(footer) + "\n"
-
-        # antall linjer i hele blokken (inkl. header/footer)
         block_lines = rendered.count("\n")
         total_item_lines += block_lines
         items.append(PasteItem(rel_path=rel, rendered=rendered, lines=block_lines))
 
-    # FFD (du la allerede inn sorteringen – beholder den)
+    # FFD (sortér m. fallende størrelse for bedre packing)
     items.sort(key=lambda it: it.lines, reverse=True)
 
     # --- Finn kapasitet og pakk ---
@@ -359,10 +389,7 @@ def run_paste(cfg: dict, list_only: bool = False) -> None:
 
         if target_files and target_files > 0:
             ideal = max(1, math.ceil(total_item_lines / target_files))
-            # Hold "linjer pr. fil" (max_lines) som en hard grense,
-            # med mindre du eksplisitt har tillatt myk overskridelse.
-            # Dette gjør at "antall linjer pr. fil" fungerer uavhengig
-            # av "antall filer"-ønsket, samtidig som vi fordeler jevnt.
+            # hold max_lines som øvre hard grense med mindre soft_overflow tillater overskridelse
             capacity = min(ideal, int(pcfg.max_lines))
         else:
             capacity = int(pcfg.max_lines)
@@ -371,51 +398,69 @@ def run_paste(cfg: dict, list_only: bool = False) -> None:
 
     # --- Skriv ut bøttene som paste_01.txt, paste_02.txt, ... + lag index.txt ---
     written: list[tuple[Path, int]] = []
-    index_rows: list[str] = []
+    # index_sections: list per paste-file; hver seksjon er list av (display_rel, code_lines)
+    index_sections: list[list[tuple[str,int]]] = []
     total_lines_written = 0
 
     for idx, bucket in enumerate(buckets, start=1):
         paste_path = pcfg.out_dir / f"paste_{idx:02d}.txt"
+        section_rows: list[tuple[str,int]] = []
         with paste_path.open("w", encoding="utf-8") as fh:
             for it in bucket:
                 fh.write(it.rendered)
-                # index-rad (vi bruker LINES: X fra header, dvs kodelinjer etter ev. komprimering)
+                # hent LINES og CHUNK for visning i index
                 try:
-                    m = re.search(r"^LINES:\s+(\d+)$", it.rendered, flags=re.M)
-                    code_lines = int(m.group(1)) if m else 0
+                    m_lines = re.search(r"^LINES:\s+(\d+)$", it.rendered, flags=re.M)
+                    code_lines = int(m_lines.group(1)) if m_lines else 0
                 except Exception:
                     code_lines = 0
-                index_rows.append(f"{it.rel_path}  |  {paste_path.name}  |  {code_lines} linjer")
+                # finn chunk info (valgfritt for visning)
+                m_chunk = re.search(r"^CHUNK:\s*(\d+)\/(\d+)", it.rendered, flags=re.M)
+                if m_chunk:
+                    disp = f"{it.rel_path} ({m_chunk.group(1)}/{m_chunk.group(2)})"
+                else:
+                    disp = it.rel_path
+                section_rows.append((disp, code_lines))
         lines_this = sum(it.lines for it in bucket)
         total_lines_written += lines_this
         written.append((paste_path, lines_this))
+        index_sections.append(section_rows)
 
     # Logg per paste-fil
     for p, n in written:
         print(f"skrev {p.name}  ({n} linjer)")
 
-    # Skriv index.txt
+    # Skriv index.txt med nytt format: seksjonsvis (Del X av totalt Y deler:)
     idx_path = pcfg.out_dir / "index.txt"
+    total_paste_files = len(written)
     with idx_path.open("w", encoding="utf-8") as fh:
         fh.write("# index over innhold i paste_*.txt\n")
-        fh.write("# format: <relativ/path> | <paste_fil> | <linjer>\n\n")
-        for row in index_rows:
-            fh.write(row + "\n")
+        fh.write("# Format per seksjon:\n")
+        fh.write("# Del <pastefile_number> av totalt <tpastefile_number> deler:\n")
+        fh.write("# <relativ/path> | <linjer>\n\n")
+        for i, section in enumerate(index_sections, start=1):
+            fh.write(f"Del {i} av totalt {total_paste_files} deler:\n")
+            for rel_disp, ln in section:
+                fh.write(f"{rel_disp}  |  {ln} linjer\n")
+            fh.write("\n")
         fh.write("\n# Genererte filer:\n")
         for p, _ in written:
             fh.write(p.name + "\n")
-        fh.write(f"\nTotalt filer: {len(index_rows)}\n")
+        # total filer = antall oppføringer i sections
+        total_entries = sum(len(s) for s in index_sections)
+        fh.write(f"\nTotalt filer: {total_entries}\n")
         fh.write(f"Antall paste-filer: {len(written)}\n")
 
     # Slutt-rapport til stdout (for UI)
     print("\n== Oppsummering ==")
-    print(f"Totalt filer: {len(index_rows)}")
+    print(f"Totalt filer: {sum(len(s) for s in index_sections)}")
     total_code_lines = 0
-    for row in index_rows:
-        try:
-            total_code_lines += int(row.rsplit("|", 1)[-1].strip().split()[0])
-        except Exception:
-            pass
+    for section in index_sections:
+        for _, ln in section:
+            try:
+                total_code_lines += int(ln)
+            except Exception:
+                pass
     print(f"Totalt linjer: {total_code_lines}")
     print(f"Antall paste-filer: {len(written)}")
     try:

@@ -5,6 +5,8 @@
     "max_lines": 4000,
     "target_files": 0,
     "soft_overflow": 0,
+    "allow_split": false,
+    "split_chunk_lines": 1000, 
     "force_single_file": false,
     "allow_binary": false,
     "filename_search": true,
